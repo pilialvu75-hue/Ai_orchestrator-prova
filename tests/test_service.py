@@ -19,7 +19,7 @@ class BuilderServiceTests(unittest.TestCase):
     def test_plan_is_hardware_independent(self) -> None:
         response = self.service.execute(BuildRequest(task="Create a notes app"))
         self.assertEqual(response.status, "ok")
-        self.assertEqual(response.engine_id, "mock-builder-v1")
+        self.assertEqual(response.engine_id, "mock-builder-v2")
         self.assertEqual(response.operations, [])
         self.assertTrue(response.metadata["mock"])
 
@@ -31,12 +31,29 @@ class BuilderServiceTests(unittest.TestCase):
         self.assertEqual(response.operations[0].action, "create")
         self.assertEqual(response.operations[0].path, ".airlab/mock-result.txt")
 
+    def test_cad_plan_preserves_master_and_derivatives(self) -> None:
+        response = self.service.execute(
+            BuildRequest(
+                task="Create a replacement bracket",
+                task_family="cad",
+                task_kind="cad.model",
+                requested_artifacts=("step", "stl", "3mf"),
+            )
+        )
+        formats = [artifact.format for artifact in response.artifacts]
+        self.assertEqual(formats, ["airlab", "step", "stl", "3mf"])
+        self.assertTrue(response.artifacts[0].editable)
+        self.assertFalse(response.artifacts[0].derived)
+
     def test_diagnostics_never_receive_task_text(self) -> None:
         secret_task = "private user project text"
         self.service.execute(BuildRequest(task=secret_task))
         serialized = repr(self.diagnostics.events)
         self.assertNotIn(secret_task, serialized)
-        self.assertEqual([e[0] for e in self.diagnostics.events], ["build_started", "build_finished"])
+        self.assertEqual(
+            [event[0] for event in self.diagnostics.events],
+            ["build_started", "build_finished"],
+        )
 
 
 if __name__ == "__main__":

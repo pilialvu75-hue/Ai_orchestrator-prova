@@ -34,6 +34,10 @@ class BuilderService:
                 "engine_id": self._engine.engine_id,
                 "mode": request.mode,
                 "target": request.target,
+                "task_family": request.task_family,
+                "task_kind": request.task_kind,
+                "input_count": len(request.inputs),
+                "requested_artifacts": len(request.requested_artifacts),
                 "module_refs": len(modules),
                 "research_refs": len(evidence),
             },
@@ -48,6 +52,7 @@ class BuilderService:
                 "status": response.status,
                 "engine_id": response.engine_id,
                 "operations": len(response.operations),
+                "artifacts": len(response.artifacts),
             },
         )
         return response
