@@ -71,6 +71,28 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
         return
 
 
+def create_server(
+    service: BuilderService,
+    *,
+    host: str,
+    port: int,
+    auth_token: str | None,
+) -> ThreadingHTTPServer:
+    """Build an AIrLab HTTP server without starting its blocking loop.
+
+    Production calls this through :func:`serve`. Tests and future embedding
+    adapters can own the lifecycle explicitly, including binding to port 0 for
+    an ephemeral loopback-only endpoint.
+    """
+
+    handler = type(
+        "ConfiguredAirLabRequestHandler",
+        (AirLabRequestHandler,),
+        {"service": service, "auth_token": auth_token},
+    )
+    return ThreadingHTTPServer((host, port), handler)
+
+
 def serve(
     service: BuilderService,
     *,
@@ -78,11 +100,11 @@ def serve(
     port: int,
     auth_token: str | None,
 ) -> ThreadingHTTPServer:
-    handler = type(
-        "ConfiguredAirLabRequestHandler",
-        (AirLabRequestHandler,),
-        {"service": service, "auth_token": auth_token},
+    server = create_server(
+        service,
+        host=host,
+        port=port,
+        auth_token=auth_token,
     )
-    server = ThreadingHTTPServer((host, port), handler)
     server.serve_forever()
     return server
