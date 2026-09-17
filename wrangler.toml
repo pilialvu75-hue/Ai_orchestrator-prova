@@ -1,0 +1,8 @@
+name = "airlab-private-mock"
+main = "src/cloudflare_worker.py"
+compatibility_date = "2026-09-17"
+compatibility_flags = ["python_workers"]
+workers_dev = true
+
+# Intentionally no secrets or provider keys here.
+# Configure AIRLAB_AUTH_TOKEN as an encrypted Worker Secret before use.
