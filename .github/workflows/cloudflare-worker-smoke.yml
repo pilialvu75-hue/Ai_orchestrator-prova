@@ -43,14 +43,19 @@ jobs:
         run: |
           set -euo pipefail
           LOG=/tmp/airlab-pywrangler.log
+
+          # Wrangler required-secret validation reads local development secrets
+          # from .dev.vars. The file is ignored by git and CI is ephemeral.
+          printf '%s\n' 'AIRLAB_AUTH_TOKEN="test-token"' > .dev.vars
+
           uvx --from workers-py pywrangler dev \
             --port 8787 \
-            --var AIRLAB_AUTH_TOKEN:test-token \
             >"$LOG" 2>&1 &
           PID=$!
           cleanup() {
             kill "$PID" 2>/dev/null || true
             wait "$PID" 2>/dev/null || true
+            rm -f .dev.vars
             echo "--- pywrangler log ---"
             cat "$LOG" || true
           }
