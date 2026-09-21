@@ -4,5 +4,14 @@ compatibility_date = "2026-09-17"
 compatibility_flags = ["python_workers"]
 workers_dev = true
 
-# Intentionally no secrets or provider keys here.
-# Configure AIRLAB_AUTH_TOKEN as an encrypted Worker Secret before use.
+# Deployment must fail if the Worker-side bearer token is not configured.
+[secrets]
+required = ["AIRLAB_AUTH_TOKEN"]
+
+# Keep invocation/error logs available while the private staging Worker is
+# being stabilized. Application code must still avoid logging task/prompt text.
+[observability]
+enabled = true
+
+# No secret values, provider keys, account IDs, or reusable browser credentials
+# belong in this file. Configure AIRLAB_AUTH_TOKEN as an encrypted Worker Secret.
