@@ -1,8 +1,12 @@
-# AIrLab architecture v0.1
+# AIrLab architecture
 
-AIrLab is a builder-runtime service for AI-Orchestrator Cantiere. It is not a general Assistant and it does not own the Module Library, Researcher or Diagnostics projects.
+The current architectural source of truth is **[AIrLab Architecture V1](AIRLAB_ARCHITECTURE_V1.md)**.
 
-## Initial topology
+The original v0.1 runtime architecture below remains important because it describes the implementation already present on `main`. It is now a **foundation layer**, not the complete product vision.
+
+## Implemented foundation (historical v0.1)
+
+AIrLab began as a hardware-independent builder-runtime service for AI-Orchestrator Cantiere.
 
 ```text
 AI-Orchestrator Cantiere
@@ -24,25 +28,26 @@ AI-Orchestrator Cantiere
  deterministic mock
 ```
 
-The mock engine is intentional. The first milestone proves the service contract and integration path without external hardware, model downloads or paid providers.
+This foundation is still valid and must be reused. The deterministic mock remains the contract oracle for CI while real providers are added behind provider-neutral capabilities.
 
-## Future adapters
+## Architecture V1 direction
 
-A real model is introduced only after the foundation is stable. Model engines may later be local llama.cpp/Ollama/vLLM, browser-safe endpoints, a home inference node, or a cloud fallback. Cantiere must not need to know where the engine runs.
+AIrLab is evolving into an **orchestrator/control plane**, not a single model runtime. The stable public concepts are capabilities and lifecycle contracts; model, tool, build, storage and research providers remain replaceable adapters.
 
-## Security baseline
+Key rules:
 
-- default bind is `127.0.0.1`;
-- binding to a non-loopback address requires `AIRLAB_AUTH_TOKEN`;
-- no provider keys are compiled into clients;
-- diagnostics contain technical metadata only, never task/prompt text;
-- model selection is an adapter concern, not a Cantiere contract.
+- **add, do not replace** providers/backends;
+- Cantiere remains authoritative for Project/Task/Execution/review/validation/approval/apply;
+- AIrLab owns capability execution and returns controlled results/evidence;
+- Library, Researcher and Diagnostics remain existing authoritative services consumed through ports;
+- model/tool routing is capability-first, not provider-first;
+- free-first/spend-safe policy is explicit;
+- no provider keys or raw prompts belong in public task/diagnostic payloads;
+- Cloudflare is one transport/runtime adapter, not an architectural dependency.
 
-## Next gates
+See:
 
-1. Foundation contract and CI green.
-2. Cantiere client adapter against the mock API.
-3. Module Library and Researcher adapters.
-4. Diagnostics transport adapter.
-5. End-to-end build simulation.
-6. Only then benchmark real coding models.
+- [AIRLAB_ARCHITECTURE_V1.md](AIRLAB_ARCHITECTURE_V1.md)
+- [LEGACY_WORK_MAP.md](LEGACY_WORK_MAP.md)
+- [TASK_FAMILIES.md](TASK_FAMILIES.md)
+- [PROTOCOL.md](PROTOCOL.md)
