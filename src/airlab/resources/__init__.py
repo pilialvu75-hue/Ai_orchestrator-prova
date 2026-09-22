@@ -1,4 +1,11 @@
 from .accounting import UsageEvent, UsageLedger
+from .candidates import (
+    CandidateStatus,
+    ResourceCandidate,
+    ResourceCandidateRegistry,
+    VerificationCheck,
+    VerificationEvidence,
+)
 from .catalog import free_resource_pool_v1
 from .model import (
     QuotaMetric,
@@ -17,9 +24,12 @@ from .state import (
 )
 
 __all__ = [
+    "CandidateStatus",
     "MemoryResourceStateStore",
     "MemoryUsageEventStore",
     "QuotaMetric",
+    "ResourceCandidate",
+    "ResourceCandidateRegistry",
     "ResourceDescriptor",
     "ResourceHealth",
     "ResourcePoolStateManager",
@@ -30,6 +40,8 @@ __all__ = [
     "UsageClass",
     "UsageEvent",
     "UsageLedger",
+    "VerificationCheck",
+    "VerificationEvidence",
     "free_resource_pool_v1",
     "quota_remaining",
 ]

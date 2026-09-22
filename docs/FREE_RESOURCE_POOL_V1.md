@@ -280,3 +280,47 @@ P0 continuation:
 7. add a read-only resource-status API only after Router/health contracts stabilize.
 
 No real provider is automatically enabled merely by appearing in this catalog.
+
+
+## 14. Implementation progress after V1 baseline
+
+### R3/R4 — runtime quota and health persistence
+
+Merged after the initial V1 catalog:
+
+- `ResourceStateSnapshot` captures observed health, availability, remaining declared quota,
+  cooldown and latency;
+- `ResourceProbe` is the provider-adapter boundary;
+- `ResourcePoolStateManager` applies verified state to the static registry;
+- `MemoryResourceStateStore` persists provider state through Memory Fabric using
+  `PROVIDER_RESOURCE_STATE`;
+- `MemoryUsageEventStore` persists normalized usage through the existing execution-history
+  memory type.
+
+The static registry still starts remote resources `UNKNOWN`. Persistence does not convert
+old state into an unconditional health claim; a fresh probe policy can decide when a stored
+snapshot is stale.
+
+### Researcher candidate validation gate
+
+A newly discovered resource now has an explicit pre-registry lifecycle:
+
+```text
+DISCOVERED
+  -> VERIFYING
+       documentation
+       terms
+       quota
+       capability
+       fallback
+  -> VALIDATED
+  -> official Resource Registry
+```
+
+`REJECTED` and `DEPRECATED` are terminal candidate states. Promotion is allowed only
+after all five required evidence classes exist. A Researcher candidate that claims
+`HEALTHY` is not promotable: live health belongs to authenticated/runtime probes, not
+research evidence.
+
+This keeps continuous discovery useful without allowing the Researcher to silently alter
+production routing policy.
