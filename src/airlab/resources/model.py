@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Iterable
 
@@ -61,6 +62,7 @@ class ResourceDescriptor:
     supported_models: tuple[str, ...] = ()
     health: ResourceHealth = ResourceHealth.UNKNOWN
     last_checked: str | None = None
+    cooldown_until: str | None = None
     replacement_candidates: tuple[str, ...] = ()
     priority: dict[str, int] = field(default_factory=dict)
     usage_classes: tuple[UsageClass, ...] = (
@@ -131,6 +133,11 @@ class ResourceRegistry:
         ResourceHealth.DISABLED,
     }
 
+    _TRANSIENT_COOLDOWN_HEALTH = {
+        ResourceHealth.RATE_LIMITED,
+        ResourceHealth.DOWN,
+    }
+
     _HEALTH_RANK = {
         ResourceHealth.HEALTHY: 0,
         ResourceHealth.DEGRADED: 1,
@@ -157,10 +164,16 @@ class ResourceRegistry:
         self._resources[resource.resource_id] = resource
 
     def get(self, resource_id: str) -> ResourceDescriptor | None:
-        return self._resources.get(resource_id)
+        resource = self._resources.get(resource_id)
+        if resource is None:
+            return None
+        return self._refresh_transient_cooldown(resource)
 
     def all(self) -> tuple[ResourceDescriptor, ...]:
-        return tuple(self._resources.values())
+        return tuple(
+            self._refresh_transient_cooldown(resource)
+            for resource in tuple(self._resources.values())
+        )
 
     def eligible(
         self,
@@ -171,7 +184,8 @@ class ResourceRegistry:
         allow_unknown_health: bool = False,
     ) -> tuple[ResourceDescriptor, ...]:
         candidates: list[ResourceDescriptor] = []
-        for resource in self._resources.values():
+        for original in tuple(self._resources.values()):
+            resource = self._refresh_transient_cooldown(original)
             if not resource.supports(capability):
                 continue
             if require_free and not resource.free_tier:
@@ -230,5 +244,38 @@ class ResourceRegistry:
             last_checked=last_checked,
             availability=availability,
         )
+        if health is ResourceHealth.HEALTHY:
+            updated = replace(updated, cooldown_until=None)
         self._resources[resource_id] = updated
+        return updated
+
+    def _refresh_transient_cooldown(
+        self,
+        resource: ResourceDescriptor,
+    ) -> ResourceDescriptor:
+        if (
+            resource.health not in self._TRANSIENT_COOLDOWN_HEALTH
+            or resource.cooldown_until is None
+        ):
+            return resource
+        try:
+            until = datetime.fromisoformat(
+                resource.cooldown_until.replace("Z", "+00:00")
+            )
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            until = until.astimezone(timezone.utc)
+        except ValueError:
+            return resource
+
+        if datetime.now(timezone.utc) < until:
+            return resource
+
+        updated = replace(
+            resource,
+            health=ResourceHealth.DEGRADED,
+            cooldown_until=None,
+            availability="cooldown_expired_retry_allowed",
+        )
+        self._resources[resource.resource_id] = updated
         return updated
