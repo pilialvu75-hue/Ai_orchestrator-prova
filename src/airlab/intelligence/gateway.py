@@ -133,6 +133,20 @@ class IntelligenceGateway:
                 continue
 
             if not self._providers.reserve_request(provider.provider_id):
+                if self._resource_pool is not None:
+                    provider_health = self._providers.health(provider.provider_id)
+                    failure_kind = (
+                        "quota"
+                        if provider_health.state == "quota_exhausted"
+                        else "rate_limit"
+                    )
+                    self._resource_pool.record_failure(
+                        provider.provider_id,
+                        failure_kind,
+                        cooldown_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
+                    )
                 self._diagnostics.emit(
                     "intelligence_provider_skipped",
                     {
@@ -159,7 +173,10 @@ class IntelligenceGateway:
                 latency_ms = int((time.monotonic() - started) * 1000)
                 self._providers.record_success(provider.provider_id, latency_ms)
                 if self._resource_pool is not None:
-                    self._resource_pool.record_success(provider.provider_id)
+                    self._resource_pool.record_success(
+                        provider.provider_id,
+                        latency_ms=latency_ms,
+                    )
                 self._record_usage(
                     request_id=request_id,
                     request=request,
@@ -204,7 +221,14 @@ class IntelligenceGateway:
                     retry_after_seconds=exc.retry_after_seconds,
                 )
                 if self._resource_pool is not None:
-                    self._resource_pool.record_failure(provider.provider_id, exc.kind)
+                    self._resource_pool.record_failure(
+                        provider.provider_id,
+                        exc.kind,
+                        latency_ms=latency_ms,
+                        cooldown_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
+                    )
                 self._record_usage(
                     request_id=request_id,
                     request=request,
@@ -254,6 +278,10 @@ class IntelligenceGateway:
                     self._resource_pool.record_failure(
                         provider.provider_id,
                         "provider_error",
+                        latency_ms=latency_ms,
+                        cooldown_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
                     )
                 self._record_usage(
                     request_id=request_id,
