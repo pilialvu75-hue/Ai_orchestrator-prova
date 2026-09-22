@@ -2,7 +2,7 @@
 
 Status: **historical baseline / migration coordination**
 Baseline date: **2026-09-22**
-AIrLab main at convergence audit: `ed2724b172580d334b86b1a254b8466e5549a65f`
+AIrLab main at convergence audit: `3cb6995964cd3c9843e9b13cdd9ce51970b0fb26`
 AI-Orchestrator main: `8e112c9bfdd9ff14efa460e33d6696882f93e3db`
 
 This map records what already exists before new architecture work is created. GitHub `main` is authoritative; historical chats are useful only when consistent with the current repositories.
@@ -68,10 +68,10 @@ This map records what already exists before new architecture work is created. Gi
 | CAD/manufacturing real engines | AIrLab task-family design | contracts only | DEFERRED | keep schemas; real kernels/slicers are P2 after software/web MVP | tool/provider registry |
 | Supabase shared persistence | Memory Fabric 02 | PR #20 adapter + reference schema; connector currently exposes no project | PARTIAL: adapter/schema COMPLETE, deployment VERIFY_RUNTIME | additive cloud node only; generate/apply real migration when a project is visible | Supabase project, auth/RLS |
 | NAS/home node | architecture direction | no current production adapter | DEFERRED | future provider/storage/build backend; never replace local/cloud | network/health |
-| Cost/accounting core | multiple discussions | no generic AIrLab implementation | MISSING | P0 shared `UsageEvent` + ResourceBudget contract | Provider Registry |
-| Generic Capability Registry | master architecture + Gateway V1 | PR #19 | IMPLEMENTED on Gateway branch | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
-| Generic Provider Registry | master architecture + parent Cloud concepts | PR #19 | IMPLEMENTED core / adapters pending | Reuse cost/access semantics; adapt existing provider implementations | Capability Registry |
-| General Model/Tool Router | master architecture + parent Cloud routing | PR #19 | IMPLEMENTED for intelligence capabilities | Extend additively to tools/build workers; preserve existing adapters | Provider Registry |
+| Cost/accounting core | Free Resource Pool V1 | `UsageEvent`, `UsageLedger`, `MemoryUsageEventStore` on main | COMPLETE V1 contract / durable adapter | REUSE; monetary FinOps mapping remains future work | Resource Pool + Memory Fabric |
+| Generic Capability Registry | master architecture + Gateway V1 | PR #19 merged (`aa3bbb6e`) | COMPLETE V1 | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
+| Provider/resource registry convergence | Resource Pool + Gateway V1 | Resource Pool main + PR #19 merged | COMPLETE V1 contracts; real provider adapters/probes pending | `ResourceRegistry` is canonical scheduling state; Gateway `ProviderRegistry` is execution/circuit state only | Capability Registry + Memory Fabric |
+| General Model/Tool Router | master architecture + parent Cloud routing | PR #19 merged | COMPLETE V1 for intelligence capabilities | Gateway consumes canonical Resource Pool eligibility/priority; extend additively to tools/build workers | Resource Registry |
 | Durable Orchestrator boundary | master architecture | Cantiere lifecycle exists; remote job contract missing | PARTIAL | define subordinate job correlation/idempotency only | Cantiere lifecycle |
 
 ## Superseded / obsolete lines
@@ -105,10 +105,10 @@ The following are historical inputs, not code sources to revive directly:
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts are converging**: Memory Fabric provenance/provider-neutral contracts are COMPLETE in merged PR #20; Gateway V1 provides capability/provider/health/route contracts in PR #19; usage/accounting and execution correlation remain.
+1. **P0 shared contracts are converging**: Memory Fabric is COMPLETE in PR #20; Gateway V1 capability/route contracts are merged in PR #19; Resource Pool health/quota/accounting contracts are on main. Execution correlation/idempotency remains the major shared-contract gap.
 2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
-3. **Gateway V1 now has generic provider health/cooldown/rate/quota state**, but provider-specific quota refresh and the wider Resource Pool still need adapters.
-4. **No generic accounting event contract exists**.
+3. **Resource Pool now owns canonical health/quota state and Memory Fabric persistence**; authenticated provider probes and real execution adapters remain to be wired.
+4. **Generic accounting now exists as `UsageEvent` with Memory Fabric persistence**; durable production wiring is additive, not a new accounting database.
 5. **Cantiere parking PR #545 is still open** and must converge with the advanced main before Durable Orchestrator semantics are considered stable.
 6. **PostHog #543, Researcher policy #542 and memory service #522 are parallel open work**, so Shared Core extraction must not bypass their canonical contracts.
 7. **A6 issue #11 is the next AIrLab/Cantiere production integration step**, but it must remain opt-in and reuse the existing production controller.
