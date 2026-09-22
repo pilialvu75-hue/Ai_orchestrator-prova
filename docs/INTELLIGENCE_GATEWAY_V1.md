@@ -143,10 +143,25 @@ Not introduced:
 - no hard-coded global provider order;
 - no automatic commercial use of development/free-prototype endpoints.
 
+## Resource Pool convergence
+
+The Gateway now consumes the canonical `airlab.resources` registry through
+`ResourcePoolBridge`. The bridge owns no second catalog. Resource eligibility, usage class,
+free-tier policy, multi-metric quota, shared health and task-specific resource priority remain
+Resource Pool facts.
+
+`ProviderRegistry` remains intentionally execution-local for circuit breaking, observed
+success rate, requests-per-minute capacity and routing quality/latency scoring. Gateway
+success/failure outcomes are projected into `ResourcePoolStateManager`, including latency
+and cooldown. A configured `UsageLedger` may mirror events to Memory Fabric through a
+best-effort sink.
+
+This split prevents duplicate provider truth while keeping the Router fast.
+
 ## Next migration ring
 
 1. add a provider-template adapter from AI-Orchestrator CloudProviderCatalog semantics;
-2. wire the first real free provider behind the registry without changing the public API;
-3. connect provider-reported quota refresh / Retry-After metadata to the V1 live quota API;
+2. wire the first real free provider behind the canonical Resource Pool/Gateway bridge;
+3. connect provider-reported quota refresh / Retry-After headers to `ResourceStateSnapshot`;
 4. expose the Gateway to AI-Orchestrator ONLINE mode while preserving Local llama.cpp OFFLINE mode;
-5. then add consensus/multi-model execution for only the capabilities that require it.
+5. then add consensus/multi-model execution only for capabilities that require it.
