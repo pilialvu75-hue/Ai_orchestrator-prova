@@ -96,6 +96,9 @@ class ProviderHealth:
     last_error: str | None = None
     last_failure_kind: FailureKind | None = None
     cooldown_until_monotonic: float | None = None
+    quota_remaining: float | None = None
+    rate_window_started_monotonic: float | None = None
+    requests_in_rate_window: int = 0
 
     @property
     def success_rate(self) -> float:
@@ -116,6 +119,8 @@ class ProviderHealth:
             "last_failure_kind": self.last_failure_kind,
             "success_rate": self.success_rate,
             "cooldown_active": self.cooldown_until_monotonic is not None,
+            "quota_remaining": self.quota_remaining,
+            "requests_in_rate_window": self.requests_in_rate_window,
         }
 
 
