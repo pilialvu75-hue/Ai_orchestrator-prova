@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
-from airlab.resources import ResourceDescriptor, ResourceHealth, ResourceRegistry, UsageClass
+from airlab.resources import (
+    ResourceDescriptor,
+    ResourceHealth,
+    ResourcePoolStateManager,
+    ResourceRegistry,
+    ResourceStateSnapshot,
+    UsageClass,
+)
 
 from .contracts import AccessClass, FailureKind, ProviderDescriptor, RoutePolicy
 
@@ -58,10 +66,20 @@ class ProviderBinding:
 
 
 class ResourcePoolBridge:
-    """Translate Resource Pool scheduling facts into Gateway routing facts."""
+    """Translate canonical Resource Pool facts into Gateway routing facts.
 
-    def __init__(self, registry: ResourceRegistry) -> None:
+    ProviderRegistry keeps fast execution-local circuit-breaker statistics.
+    ResourcePoolStateManager, when supplied, owns shared/persisted provider state.
+    """
+
+    def __init__(
+        self,
+        registry: ResourceRegistry,
+        *,
+        state_manager: ResourcePoolStateManager | None = None,
+    ) -> None:
         self.registry = registry
+        self._state_manager = state_manager
 
     def rejection_reasons(
         self,
@@ -108,24 +126,92 @@ class ResourcePoolBridge:
             return None
         return resource.priority_for(resource_capability)
 
-    def record_success(self, provider_id: str) -> None:
-        if self.registry.get(provider_id) is not None:
-            self.registry.update_health(provider_id, ResourceHealth.HEALTHY)
-
-    def record_failure(self, provider_id: str, kind: FailureKind) -> None:
-        if self.registry.get(provider_id) is None:
+    def record_success(
+        self,
+        provider_id: str,
+        *,
+        latency_ms: int | None = None,
+    ) -> None:
+        resource = self.registry.get(provider_id)
+        if resource is None:
             return
+        if self._state_manager is None:
+            self.registry.update_health(
+                provider_id,
+                ResourceHealth.HEALTHY,
+                last_checked=_utc_now(),
+                availability="api_reachable",
+            )
+            return
+        self._state_manager.apply(
+            ResourceStateSnapshot(
+                resource_id=provider_id,
+                health=ResourceHealth.HEALTHY,
+                checked_at=_utc_now(),
+                availability="api_reachable",
+                quota_remaining=None,
+                cooldown_until=None,
+                latency_ms=latency_ms,
+            )
+        )
+
+    def record_failure(
+        self,
+        provider_id: str,
+        kind: FailureKind,
+        *,
+        latency_ms: int | None = None,
+        cooldown_seconds: float | None = None,
+    ) -> None:
+        resource = self.registry.get(provider_id)
+        if resource is None:
+            return
+
         if kind == "rate_limit":
             health = ResourceHealth.RATE_LIMITED
+            availability = "rate_limited"
         elif kind == "quota":
             health = ResourceHealth.EXHAUSTED
+            availability = "quota_exhausted"
         elif kind in {"network", "provider_unavailable"}:
             health = ResourceHealth.DOWN
-        elif kind in {"timeout", "authentication", "provider_error"}:
+            availability = "temporarily_unavailable"
+        elif kind == "authentication":
             health = ResourceHealth.DEGRADED
+            availability = "auth_required"
+        elif kind in {"timeout", "provider_error"}:
+            health = ResourceHealth.DEGRADED
+            availability = "degraded"
         else:
             return
-        self.registry.update_health(provider_id, health)
+
+        cooldown_until = _cooldown_until(cooldown_seconds)
+        if self._state_manager is None:
+            updated = self.registry.update_health(
+                provider_id,
+                health,
+                last_checked=_utc_now(),
+                availability=availability,
+            )
+            if cooldown_until is not None:
+                from dataclasses import replace
+
+                self.registry.replace(
+                    replace(updated, cooldown_until=cooldown_until)
+                )
+            return
+
+        self._state_manager.apply(
+            ResourceStateSnapshot(
+                resource_id=provider_id,
+                health=health,
+                checked_at=_utc_now(),
+                availability=availability,
+                quota_remaining=None,
+                cooldown_until=cooldown_until,
+                latency_ms=latency_ms,
+            )
+        )
 
 
 def provider_descriptor_from_resource(
@@ -190,3 +276,16 @@ def provider_descriptor_from_resource(
         privacy_class="standard",
         adapter_id=binding.adapter_id,
     )
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _cooldown_until(seconds: float | None) -> str | None:
+    if seconds is None:
+        return None
+    value = max(0.0, seconds)
+    return (
+        datetime.now(timezone.utc) + timedelta(seconds=value)
+    ).isoformat().replace("+00:00", "Z")
