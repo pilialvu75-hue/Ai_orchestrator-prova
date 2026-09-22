@@ -12,6 +12,8 @@ from .intelligence.openai_compat import (
     chat_completion_response,
     parse_chat_completion_request,
 )
+from .memory import MemoryFabric
+from .memory.api import dispatch_memory_request
 from .service import BuilderService
 
 
@@ -19,6 +21,7 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
     service: BuilderService
     auth_token: str | None = None
     gateway: IntelligenceGateway | None = None
+    memory: MemoryFabric | None = None
 
     def _authorized(self) -> bool:
         if not self.auth_token:
@@ -50,6 +53,23 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         if not self._guard_auth():
+            return
+        if self.path.startswith("/v1/memory"):
+            if self.memory is None:
+                self._write_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "memory_fabric_unavailable"},
+                )
+                return
+            try:
+                result = dispatch_memory_request(
+                    self.memory,
+                    method="GET",
+                    path=self.path,
+                )
+                self._write_json(result.status, result.payload)
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
         if self.path == "/health":
             caps = self.service.capabilities()
@@ -89,6 +109,24 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         if not self._guard_auth():
+            return
+        if self.path.startswith("/v1/memory"):
+            if self.memory is None:
+                self._write_json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "memory_fabric_unavailable"},
+                )
+                return
+            try:
+                result = dispatch_memory_request(
+                    self.memory,
+                    method="POST",
+                    path=self.path,
+                    payload=self._read_json_object(),
+                )
+                self._write_json(result.status, result.payload)
+            except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+                self._write_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
             return
         if self.path not in {"/v1/tasks", "/v1/chat/completions"}:
             self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
@@ -133,6 +171,7 @@ def create_server(
     port: int,
     auth_token: str | None,
     gateway: IntelligenceGateway | None = None,
+    memory: MemoryFabric | None = None,
 ) -> ThreadingHTTPServer:
     """Build an AIrLab HTTP server without starting its blocking loop."""
 
@@ -143,6 +182,7 @@ def create_server(
             "service": service,
             "auth_token": auth_token,
             "gateway": gateway,
+            "memory": memory,
         },
     )
     return ThreadingHTTPServer((host, port), handler)
@@ -155,6 +195,7 @@ def serve(
     port: int,
     auth_token: str | None,
     gateway: IntelligenceGateway | None = None,
+    memory: MemoryFabric | None = None,
 ) -> ThreadingHTTPServer:
     server = create_server(
         service,
@@ -162,6 +203,7 @@ def serve(
         port=port,
         auth_token=auth_token,
         gateway=gateway,
+        memory=memory,
     )
     server.serve_forever()
     return server
