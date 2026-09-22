@@ -269,15 +269,22 @@ usage class, quotas, fallback and evidence of capability/health probing.
 
 ## 13. Next implementation gates
 
-P0 continuation:
+Completed in the V1 convergence ring:
+
+- Gateway outcomes flow through `ResourcePoolStateManager`;
+- usage can flow through `MemoryUsageEventStore`;
+- persistence failure is non-fatal to an otherwise successful provider call;
+- execution cooldown is projected into canonical Resource Pool state;
+- expired transient `RATE_LIMITED` / `DOWN` state reopens as `DEGRADED`;
+- `EXHAUSTED` never auto-recovers without fresh quota evidence.
+
+Remaining P0/P1:
 
 1. add authenticated provider-state probes/adapters that update health and remaining quota;
 2. expose the same schema to AI-Orchestrator through a Dart/shared-contract adapter;
-3. persist Gateway-observed provider outcomes through `ResourcePoolStateManager` + Memory Fabric;
-4. persist Gateway usage through the shared `UsageEvent` / `MemoryUsageEventStore` path;
-5. add closed-vocabulary diagnostics for selection, fallback, rate limit and exhaustion;
-6. connect the existing Researcher candidate-validation inbox to validated promotion workflows;
-7. add a read-only resource-status API after Router/health contracts stabilize.
+3. connect the existing Researcher candidate-validation inbox to validated promotion workflows;
+4. define snapshot freshness/probe cadence for persisted provider state;
+5. add a read-only resource-status API after real-provider probe contracts stabilize.
 
 No real provider is automatically enabled merely by appearing in this catalog.
 
@@ -329,3 +336,22 @@ production routing policy.
 ### Intelligence Gateway convergence
 
 Merged Gateway V1 now maps fine-grained capabilities such as `architecture` and `coding.review` onto Resource Pool classes such as `llm.reasoning` and `llm.review`. Resource Pool `eligible()` is the authoritative schedulability gate; Gateway then applies execution-specific quality and latency scoring. Provider outcomes can flow through `ResourcePoolStateManager`, and usage can flow through `MemoryUsageEventStore`, so no second resource-state or accounting database is required.
+
+
+### Cooldown and persistence resilience
+
+Remote persistence is additive, not a runtime dependency. `ResourcePoolStateManager`
+applies a verified observation to the local canonical registry first and attempts Memory
+Fabric persistence best-effort. A failed memory node is recorded for diagnostics/reconciliation
+but does not turn a successful LLM/provider response into a failed task.
+
+Transient provider states carry an explicit `cooldown_until`:
+
+```text
+RATE_LIMITED --cooldown expires--> DEGRADED -> eligible for controlled retry
+DOWN         --cooldown expires--> DEGRADED -> eligible for controlled retry
+EXHAUSTED    --time alone---------> EXHAUSTED
+```
+
+The last rule is intentional: quota exhaustion may be cleared only by a fresh authenticated
+quota observation, never by a guessed timer.
