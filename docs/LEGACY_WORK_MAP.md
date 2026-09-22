@@ -2,7 +2,7 @@
 
 Status: **historical baseline / migration coordination**
 Baseline date: **2026-09-22**
-AIrLab main at convergence audit: `3cb6995964cd3c9843e9b13cdd9ce51970b0fb26`
+AIrLab main at resilience-ring start: `fec3f5ed0186989b6235195f97f9510def1e5539` (Gateway/Resource Pool convergence #25 merged)
 AI-Orchestrator main: `8e112c9bfdd9ff14efa460e33d6696882f93e3db`
 
 This map records what already exists before new architecture work is created. GitHub `main` is authoritative; historical chats are useful only when consistent with the current repositories.
@@ -102,26 +102,27 @@ The following are historical inputs, not code sources to revive directly:
 | real CAD/3D immediately | Early product ambition | DEFERRED | web/software MVP first; retain contracts only |
 | raw telemetry to remote service | Not required | REJECTED | local Diagnostics authority + privacy-safe optional telemetry |
 | automatic Researcher apply | Not accepted | REJECTED | Researcher remains isolated/candidate-only through validation gates |
+| Shared memory availability is required for provider execution | Persistence was initially synchronous on the runtime path | REJECTED | Apply canonical resource/usage state locally first; persist best-effort and reconcile failures without invalidating successful provider work |
+| Transient resource failure remains blocked until a manual probe | Early V1 health state had no canonical cooldown expiry | SUPERSEDED | RATE_LIMITED/DOWN carry shared cooldown and reopen as DEGRADED; EXHAUSTED requires fresh quota evidence |
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts are converging**: Memory Fabric is COMPLETE in PR #20; Gateway V1 capability/route contracts are merged in PR #19; Resource Pool health/quota/accounting contracts are on main. Execution correlation/idempotency remains the major shared-contract gap.
-2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
-3. **Resource Pool now owns canonical health/quota state and Memory Fabric persistence**; authenticated provider probes and real execution adapters remain to be wired.
-4. **Generic accounting now exists as `UsageEvent` with Memory Fabric persistence**; durable production wiring is additive, not a new accounting database.
-5. **Cantiere parking PR #545 is still open** and must converge with the advanced main before Durable Orchestrator semantics are considered stable.
-6. **PostHog #543, Researcher policy #542 and memory service #522 are parallel open work**, so Shared Core extraction must not bypass their canonical contracts.
-7. **A6 issue #11 is the next AIrLab/Cantiere production integration step**, but it must remain opt-in and reuse the existing production controller.
+1. **Real provider execution remains the main Resource Pool gap**: the catalog, Gateway bridge, health/quota state, accounting, cooldown and Memory Fabric persistence exist, but authenticated provider probes/adapters are still required before remote entries can leave `UNKNOWN` safely.
+2. **AI-Orchestrator needs the shared/Dart-side adapter** so the parent app consumes the same capability/resource truth rather than growing another pool.
+3. **Provider-reported quota/reset/freshness is not yet normalized end to end**: Retry-After, remaining quota and snapshot staleness must feed the canonical Resource Pool.
+4. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
+5. **Cantiere execution correlation/idempotency and parking convergence remain Durable Orchestrator dependencies**.
+6. **Parallel parent work such as Diagnostics/PostHog, Researcher policy and durable memory must be consumed only from merged source-of-truth contracts**.
+7. **A6 production runner remains a Cantiere-side integration step** and must reuse the existing production controller.
 
 ## Migration order
 
-1. Freeze Architecture V1 and this Legacy Work Map.
-2. Create the P0 Contract Pack without changing existing runtime behavior.
-3. Adapt existing CloudProviderCatalog/free-first semantics into the generic Provider/Resource contracts.
-4. Adapt existing durable memory into Memory Fabric.
-5. Define Cantiere ↔ AIrLab execution correlation/idempotency.
-6. Connect Library/Researcher/Diagnostics real adapters.
+1. Finish Resource Pool/Gateway resilience and keep canonical state independent from Memory Fabric availability.
+2. Reuse AI-Orchestrator CloudProviderCatalog semantics to implement the first real free provider adapter.
+3. Add authenticated health/quota/reset probes plus snapshot freshness policy.
+4. Expose the same capability/resource contract to AI-Orchestrator through a shared/Dart adapter.
+5. Define/finish Cantiere ↔ AIrLab execution correlation, idempotency and parking/resume semantics.
+6. Connect real Library/Researcher/Diagnostics adapters.
 7. Complete A6 production-runner integration.
-8. Add first real free provider through Resource Pool + Router.
-9. Add `build.web` worker and complete the 0 EUR web MVP.
-10. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
+8. Add `build.web` worker and complete the 0 EUR web MVP.
+9. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
