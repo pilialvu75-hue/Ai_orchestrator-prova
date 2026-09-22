@@ -11,6 +11,8 @@ from .intelligence.openai_compat import (
     chat_completion_response,
     parse_chat_completion_request,
 )
+from .memory import MemoryFabric
+from .memory.api import dispatch_memory_request
 from .service import BuilderService
 
 
@@ -41,6 +43,7 @@ def dispatch_cloudflare_request(
     body: str | None,
     auth_token: str | None,
     gateway: IntelligenceGateway | None = None,
+    memory: MemoryFabric | None = None,
 ) -> CloudflareApiResult:
     """Map a Cloudflare Worker request onto the stable AIrLab HTTP contract.
 
@@ -65,6 +68,34 @@ def dispatch_cloudflare_request(
 
     normalized_method = method.strip().upper()
     normalized_path = path or "/"
+
+    if normalized_path.startswith("/v1/memory"):
+        if memory is None:
+            return CloudflareApiResult(
+                status=503,
+                payload={"error": "memory_fabric_unavailable"},
+            )
+        try:
+            payload = (
+                _decode_json_body(body)
+                if normalized_method == "POST"
+                else None
+            )
+            result = dispatch_memory_request(
+                memory,
+                method=normalized_method,
+                path=normalized_path,
+                payload=payload,
+            )
+            return CloudflareApiResult(
+                status=result.status,
+                payload=result.payload,
+            )
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            return CloudflareApiResult(
+                status=400,
+                payload={"error": str(exc)},
+            )
 
     if normalized_method == "GET":
         if normalized_path == "/health":
