@@ -4,8 +4,13 @@ import os
 from ipaddress import ip_address
 
 from airlab.adapters.mock_engine import MockBuilderEngine
-from airlab.adapters.null_integrations import MemoryDiagnostics, NullModuleLibrary, NullResearcher
+from airlab.adapters.null_integrations import (
+    MemoryDiagnostics,
+    NullModuleLibrary,
+    NullResearcher,
+)
 from airlab.http_api import serve
+from airlab.intelligence.gateway import create_control_gateway
 from airlab.service import BuilderService
 
 
@@ -26,13 +31,22 @@ def main() -> None:
         raise SystemExit(
             "AIRLAB_AUTH_TOKEN is required when AIRLAB_HOST is not loopback"
         )
+
+    diagnostics = MemoryDiagnostics()
     service = BuilderService(
         engine=MockBuilderEngine(),
         library=NullModuleLibrary(),
         researcher=NullResearcher(),
-        diagnostics=MemoryDiagnostics(),
+        diagnostics=diagnostics,
     )
-    serve(service, host=host, port=port, auth_token=token)
+    gateway = create_control_gateway(diagnostics)
+    serve(
+        service,
+        host=host,
+        port=port,
+        auth_token=token,
+        gateway=gateway,
+    )
 
 
 if __name__ == "__main__":
