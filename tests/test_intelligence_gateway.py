@@ -207,6 +207,25 @@ class IntelligenceGatewayTest(unittest.TestCase):
         self.assertTrue(request.policy.free_only)
         self.assertFalse(request.policy.paid_allowed)
 
+    def test_spend_policy_requires_real_json_booleans(self) -> None:
+        with self.assertRaisesRegex(ValueError, "paid_allowed must be a boolean"):
+            parse_chat_completion_request(
+                {
+                    "capability": "coding.review",
+                    "messages": [{"role": "user", "content": "review this"}],
+                    "paid_allowed": "false",
+                }
+            )
+
+        with self.assertRaisesRegex(ValueError, "free_only must be a boolean"):
+            parse_chat_completion_request(
+                {
+                    "capability": "coding.review",
+                    "messages": [{"role": "user", "content": "review this"}],
+                    "free_only": "false",
+                }
+            )
+
     def test_development_free_access_is_spend_safe_even_when_cost_is_unknown(self) -> None:
         diagnostics = Diagnostics()
         provider = ProviderDescriptor(
