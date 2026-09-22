@@ -53,7 +53,7 @@ provider adapter must update them before automatic selection.
 | Cantiere Project/Task/Execution | AI-Orchestrator | Existing; AIrLab integration merged | REUSE; Resource Pool must not create a second lifecycle |
 | Diagnostics / RuntimeEventLog | AI-Orchestrator | Existing | REUSE as local source; Resource Pool emits closed-vocabulary resource/usage events later |
 | PostHog bridge | AI-Orchestrator PR #543 | Open at verification time | DO NOT treat as merged source of truth |
-| Memory Fabric | AIrLab branch `airlab-memory-fabric-v1` | Parallel active branch | DO NOT overlap; later persist quota/health/accounting through its contract |
+| Memory Fabric | AIrLab current `main` (`src/airlab/memory/*`) | MERGED during this workstream | REUSE; persist quota/health/accounting through its provider-neutral contract rather than creating storage here |
 | Intelligence Gateway branch | `feat/intelligence-gateway-v1` | Behind current main with no unique commits at verification | Router must consume Resource Pool contracts when rebuilt on current main |
 | Cloudflare Worker adapter | AIrLab merged PRs #7/#9 | Implemented staging transport | REUSE as host/transport adapter, not hard dependency |
 | Library / Researcher | AI-Orchestrator existing integrations | Existing | REUSE; Researcher may submit candidate resources, never auto-promote them |
