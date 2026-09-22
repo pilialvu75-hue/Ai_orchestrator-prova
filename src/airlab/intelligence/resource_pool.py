@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
-from airlab.resources import ResourceDescriptor, ResourceHealth, ResourceRegistry, UsageClass
+from airlab.resources import (
+    ResourceDescriptor,
+    ResourceHealth,
+    ResourcePoolStateManager,
+    ResourceRegistry,
+    ResourceStateSnapshot,
+    UsageClass,
+)
 
 from .contracts import AccessClass, FailureKind, ProviderDescriptor, RoutePolicy
 
@@ -58,10 +66,23 @@ class ProviderBinding:
 
 
 class ResourcePoolBridge:
-    """Translate Resource Pool scheduling facts into Gateway routing facts."""
+    """Translate canonical Resource Pool state into Gateway execution facts.
 
-    def __init__(self, registry: ResourceRegistry) -> None:
+    ResourceRegistry remains the source of truth for schedulability, usage
+    class, free-tier policy and quota. The Gateway owns model quality/latency
+    scoring and its short-lived execution circuit state.
+    """
+
+    def __init__(
+        self,
+        registry: ResourceRegistry,
+        *,
+        state_manager: ResourcePoolStateManager | None = None,
+    ) -> None:
         self.registry = registry
+        self.state_manager = state_manager or ResourcePoolStateManager(
+            registry=registry
+        )
 
     def rejection_reasons(
         self,
@@ -77,8 +98,21 @@ class ResourcePoolBridge:
         if resource_capability is None or not resource.supports(resource_capability):
             return ("resource_capability_mismatch",)
 
-        failures: list[str] = []
         usage_class = _ENVIRONMENT_TO_USAGE[policy.environment]
+        require_free = policy.free_only or not policy.paid_allowed
+        eligible_ids = {
+            item.resource_id
+            for item in self.registry.eligible(
+                resource_capability,
+                usage_class=usage_class,
+                require_free=require_free,
+                allow_unknown_health=False,
+            )
+        }
+        if provider_id in eligible_ids:
+            return ()
+
+        failures: list[str] = []
         if not resource.allows_use(usage_class):
             failures.append("resource_usage_class")
         if resource.development_only and usage_class in {
@@ -95,8 +129,7 @@ class ResourcePoolBridge:
         if resource.quota_exhausted:
             failures.append("resource_quota_exhausted")
 
-        spend_safe_required = policy.free_only or not policy.paid_allowed
-        if spend_safe_required and not resource.free_tier:
+        if require_free and not resource.free_tier:
             failures.append("resource_not_free")
 
         return tuple(failures)
@@ -108,24 +141,71 @@ class ResourcePoolBridge:
             return None
         return resource.priority_for(resource_capability)
 
-    def record_success(self, provider_id: str) -> None:
-        if self.registry.get(provider_id) is not None:
-            self.registry.update_health(provider_id, ResourceHealth.HEALTHY)
+    def record_success(
+        self,
+        provider_id: str,
+        *,
+        latency_ms: int | None = None,
+    ) -> None:
+        if self.registry.get(provider_id) is None:
+            return
+        self.state_manager.apply(
+            ResourceStateSnapshot(
+                resource_id=provider_id,
+                health=ResourceHealth.HEALTHY,
+                checked_at=_utc_now(),
+                availability="request_succeeded",
+                quota_remaining={},
+                latency_ms=None if latency_ms is None else float(latency_ms),
+            )
+        )
 
-    def record_failure(self, provider_id: str, kind: FailureKind) -> None:
+    def record_failure(
+        self,
+        provider_id: str,
+        kind: FailureKind,
+        *,
+        latency_ms: int | None = None,
+        retry_after_seconds: float | None = None,
+    ) -> None:
         if self.registry.get(provider_id) is None:
             return
         if kind == "rate_limit":
             health = ResourceHealth.RATE_LIMITED
+            availability = "rate_limited"
         elif kind == "quota":
             health = ResourceHealth.EXHAUSTED
+            availability = "quota_exhausted"
         elif kind in {"network", "provider_unavailable"}:
             health = ResourceHealth.DOWN
-        elif kind in {"timeout", "authentication", "provider_error"}:
+            availability = "provider_unavailable"
+        elif kind == "authentication":
             health = ResourceHealth.DEGRADED
+            availability = "authentication_required"
+        elif kind in {"timeout", "provider_error"}:
+            health = ResourceHealth.DEGRADED
+            availability = "request_failed"
         else:
             return
-        self.registry.update_health(provider_id, health)
+
+        cooldown_until = None
+        if retry_after_seconds is not None:
+            cooldown_until = (
+                datetime.now(timezone.utc)
+                + timedelta(seconds=max(0.0, retry_after_seconds))
+            ).isoformat()
+
+        self.state_manager.apply(
+            ResourceStateSnapshot(
+                resource_id=provider_id,
+                health=health,
+                checked_at=_utc_now(),
+                availability=availability,
+                quota_remaining={},
+                cooldown_until=cooldown_until,
+                latency_ms=None if latency_ms is None else float(latency_ms),
+            )
+        )
 
 
 def provider_descriptor_from_resource(
@@ -190,3 +270,7 @@ def provider_descriptor_from_resource(
         privacy_class="standard",
         adapter_id=binding.adapter_id,
     )
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
