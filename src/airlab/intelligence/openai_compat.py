@@ -12,6 +12,13 @@ _ALLOWED_ENVIRONMENTS = {"personal", "development", "production", "commercial"}
 _ALLOWED_PRIVACY = {"standard", "no_training", "local_only"}
 
 
+def _strict_bool(payload: dict[str, Any], key: str, default: bool) -> bool:
+    value = payload.get(key, default)
+    if not isinstance(value, bool):
+        raise ValueError(f"{key} must be a boolean")
+    return value
+
+
 def parse_chat_completion_request(payload: dict[str, Any]) -> GatewayRequest:
     raw_messages = payload.get("messages")
     if not isinstance(raw_messages, list) or not raw_messages:
@@ -63,9 +70,9 @@ def parse_chat_completion_request(payload: dict[str, Any]) -> GatewayRequest:
     if complexity < 0.0 or complexity > 1.0:
         raise ValueError("task_complexity must be between 0 and 1")
 
-    paid_allowed = bool(payload.get("paid_allowed", False))
-    free_only = bool(payload.get("free_only", not paid_allowed))
-    free_first = bool(payload.get("free_first", True))
+    paid_allowed = _strict_bool(payload, "paid_allowed", False)
+    free_only = _strict_bool(payload, "free_only", not paid_allowed)
+    free_first = _strict_bool(payload, "free_first", True)
 
     return GatewayRequest(
         capability=capability,
