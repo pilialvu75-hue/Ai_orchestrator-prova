@@ -8,6 +8,7 @@ from urllib.request import Request, urlopen
 from airlab.adapters.mock_engine import MockBuilderEngine
 from airlab.adapters.null_integrations import MemoryDiagnostics, NullModuleLibrary, NullResearcher
 from airlab.http_api import create_server
+from airlab.intelligence.gateway import create_control_gateway
 from airlab.service import BuilderService
 
 
@@ -20,11 +21,13 @@ class AirLabHttpRoundTripTests(unittest.TestCase):
             researcher=NullResearcher(),
             diagnostics=self.diagnostics,
         )
+        self.gateway = create_control_gateway(self.diagnostics)
         self.server = create_server(
             service,
             host="127.0.0.1",
             port=0,
             auth_token=None,
+            gateway=self.gateway,
         )
         self.thread = threading.Thread(
             target=self.server.serve_forever,
@@ -107,6 +110,36 @@ class AirLabHttpRoundTripTests(unittest.TestCase):
 
         serialized_diagnostics = repr(self.diagnostics.events)
         self.assertNotIn(private_task_text, serialized_diagnostics)
+
+    def test_intelligence_gateway_uses_capability_over_real_http(self) -> None:
+        capabilities = self._get_json("/v1/intelligence/capabilities")
+        capability_ids = {
+            item["capability_id"] for item in capabilities["capabilities"]
+        }
+        self.assertIn("coding.review", capability_ids)
+        self.assertIn("architecture", capability_ids)
+
+        result = self._post_json(
+            "/v1/chat/completions",
+            {
+                "model": "client-model-must-not-select-provider",
+                "capability": "coding.review",
+                "messages": [
+                    {"role": "user", "content": "review the staged change"}
+                ],
+                "environment": "development",
+                "free_only": True,
+                "paid_allowed": False,
+            },
+        )
+
+        self.assertEqual(result["model"], "airlab-gateway")
+        self.assertEqual(
+            result["choices"][0]["message"]["content"],
+            "CONTROL[coding.review]: review the staged change",
+        )
+        self.assertEqual(result["airlab"]["capability"], "coding.review")
+        self.assertNotIn("provider_id", result["airlab"])
 
     def test_manufacturing_gcode_requires_printer_profile(self) -> None:
         payload = {
