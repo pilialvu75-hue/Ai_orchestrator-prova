@@ -223,6 +223,16 @@ class IntelligenceGateway:
                         "attempt_index": index,
                     },
                 )
+                if index + 1 < len(decision.candidates):
+                    self._diagnostics.emit(
+                        "intelligence_fallback",
+                        {
+                            "request_id": request_id,
+                            "from_provider_id": provider.provider_id,
+                            "to_provider_id": decision.candidates[index + 1].provider_id,
+                            "failure_kind": "provider_error",
+                        },
+                    )
 
         raise GatewayUnavailable("all eligible providers failed")
 
