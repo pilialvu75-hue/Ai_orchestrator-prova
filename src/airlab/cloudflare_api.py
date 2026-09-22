@@ -6,6 +6,11 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from .contracts import BuildRequest
+from .intelligence.gateway import GatewayUnavailable, IntelligenceGateway
+from .intelligence.openai_compat import (
+    chat_completion_response,
+    parse_chat_completion_request,
+)
 from .service import BuilderService
 
 
@@ -13,6 +18,18 @@ from .service import BuilderService
 class CloudflareApiResult:
     status: int
     payload: dict[str, Any]
+
+
+def _decode_json_body(body: str | None) -> dict[str, Any]:
+    if body is None:
+        raise ValueError("invalid request size")
+    encoded = body.encode("utf-8")
+    if not encoded or len(encoded) > 1_000_000:
+        raise ValueError("invalid request size")
+    payload = json.loads(body)
+    if not isinstance(payload, dict):
+        raise ValueError("JSON body must be an object")
+    return payload
 
 
 def dispatch_cloudflare_request(
@@ -23,15 +40,12 @@ def dispatch_cloudflare_request(
     authorization: str | None,
     body: str | None,
     auth_token: str | None,
+    gateway: IntelligenceGateway | None = None,
 ) -> CloudflareApiResult:
     """Map a Cloudflare Worker request onto the stable AIrLab HTTP contract.
 
-    This function deliberately depends only on the Python standard library and
-    AIrLab domain/service code. The Cloudflare runtime adapter remains a thin
-    shell, while this dispatcher is fully testable in the normal Python 3.11 CI.
-
-    Security is fail-closed: a deployed Worker without AIRLAB_AUTH_TOKEN must
-    not accidentally expose the API publicly.
+    Cloudflare remains a transport adapter. Intelligence routing is delegated to
+    the provider-neutral gateway and never implemented in this module.
     """
 
     expected_token = (auth_token or "").strip()
@@ -68,27 +82,55 @@ def dispatch_cloudflare_request(
                 status=200,
                 payload=asdict(service.capabilities()),
             )
+        if normalized_path == "/v1/intelligence/capabilities":
+            if gateway is None:
+                return CloudflareApiResult(
+                    status=503,
+                    payload={"error": "intelligence_gateway_unavailable"},
+                )
+            return CloudflareApiResult(
+                status=200,
+                payload={"capabilities": gateway.capabilities_snapshot()},
+            )
+        if normalized_path == "/v1/intelligence/providers":
+            if gateway is None:
+                return CloudflareApiResult(
+                    status=503,
+                    payload={"error": "intelligence_gateway_unavailable"},
+                )
+            return CloudflareApiResult(
+                status=200,
+                payload={"providers": gateway.providers_snapshot()},
+            )
         return CloudflareApiResult(status=404, payload={"error": "not_found"})
 
     if normalized_method == "POST":
-        if normalized_path != "/v1/tasks":
+        if normalized_path not in {"/v1/tasks", "/v1/chat/completions"}:
             return CloudflareApiResult(status=404, payload={"error": "not_found"})
-
         try:
-            if body is None:
-                raise ValueError("invalid request size")
-            encoded = body.encode("utf-8")
-            if not encoded or len(encoded) > 1_000_000:
-                raise ValueError("invalid request size")
-
-            payload = json.loads(body)
-            if not isinstance(payload, dict):
-                raise ValueError("JSON body must be an object")
-
-            request = BuildRequest.from_json(payload)
-            response = service.execute(request)
-            return CloudflareApiResult(status=200, payload=response.to_json())
-        except (ValueError, json.JSONDecodeError) as exc:
+            payload = _decode_json_body(body)
+            if normalized_path == "/v1/tasks":
+                request = BuildRequest.from_json(payload)
+                response = service.execute(request)
+                return CloudflareApiResult(status=200, payload=response.to_json())
+            if normalized_path == "/v1/chat/completions":
+                if gateway is None:
+                    return CloudflareApiResult(
+                        status=503,
+                        payload={"error": "intelligence_gateway_unavailable"},
+                    )
+                request = parse_chat_completion_request(payload)
+                response = gateway.complete(request)
+                return CloudflareApiResult(
+                    status=200,
+                    payload=chat_completion_response(response),
+                )
+        except GatewayUnavailable:
+            return CloudflareApiResult(
+                status=503,
+                payload={"error": "intelligence_unavailable"},
+            )
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
             return CloudflareApiResult(
                 status=400,
                 payload={"error": str(exc)},
