@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .contracts import RouteCandidate, RouteDecision, RouteRequest
 from .registry import CapabilityRegistry, ProviderRegistry
+from .resource_pool import ResourcePoolBridge
 
 
 class RoutingError(RuntimeError):
@@ -22,9 +23,11 @@ class IntelligenceRouter:
         *,
         capabilities: CapabilityRegistry,
         providers: ProviderRegistry,
+        resource_pool: ResourcePoolBridge | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._providers = providers
+        self._resource_pool = resource_pool
 
     def route(self, request: RouteRequest) -> RouteDecision:
         try:
@@ -44,6 +47,16 @@ class IntelligenceRouter:
             if not provider.supports(request.capability):
                 rejected[provider.provider_id] = ("capability_mismatch",)
                 continue
+
+            if self._resource_pool is not None:
+                resource_failures = self._resource_pool.rejection_reasons(
+                    provider.provider_id,
+                    request.capability,
+                    request.policy,
+                )
+                if resource_failures:
+                    rejected[provider.provider_id] = resource_failures
+                    continue
 
             health = self._providers.health(provider.provider_id)
             failures = self._rejection_reasons(
@@ -86,7 +99,19 @@ class IntelligenceRouter:
                 reasons.append("latency")
 
             score -= max(0.0, min(1.0, provider.historical_error_rate)) * 100.0
-            score += max(0.0, 100.0 - float(provider.priority))
+            if self._resource_pool is not None:
+                resource_priority = self._resource_pool.priority_for(
+                    provider.provider_id,
+                    request.capability,
+                )
+            else:
+                resource_priority = None
+            effective_priority = (
+                resource_priority if resource_priority is not None else provider.priority
+            )
+            score += max(0.0, 100.0 - float(effective_priority))
+            if resource_priority is not None:
+                reasons.append("resource_priority")
 
             if health.quota_remaining is not None:
                 score += min(50.0, max(0.0, health.quota_remaining))
