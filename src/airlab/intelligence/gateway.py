@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import uuid4
 
+from airlab.resources import UsageEvent, UsageLedger
+
 from .contracts import (
     FailureKind,
     GatewayAttempt,
@@ -58,12 +60,14 @@ class IntelligenceGateway:
         adapters: list[IntelligenceProvider],
         diagnostics: DiagnosticsSink,
         resource_pool: ResourcePoolBridge | None = None,
+        usage_ledger: UsageLedger | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._providers = providers
         self._adapters = {adapter.provider_id: adapter for adapter in adapters}
         self._diagnostics = diagnostics
         self._resource_pool = resource_pool
+        self._usage_ledger = usage_ledger
         self._router = IntelligenceRouter(
             capabilities=capabilities,
             providers=providers,
@@ -156,6 +160,13 @@ class IntelligenceGateway:
                 self._providers.record_success(provider.provider_id, latency_ms)
                 if self._resource_pool is not None:
                     self._resource_pool.record_success(provider.provider_id)
+                self._record_usage(
+                    request_id=request_id,
+                    request=request,
+                    provider_id=provider.provider_id,
+                    status="succeeded",
+                    output_usage=output.usage,
+                )
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
@@ -194,6 +205,12 @@ class IntelligenceGateway:
                 )
                 if self._resource_pool is not None:
                     self._resource_pool.record_failure(provider.provider_id, exc.kind)
+                self._record_usage(
+                    request_id=request_id,
+                    request=request,
+                    provider_id=provider.provider_id,
+                    status="failed",
+                )
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
@@ -238,6 +255,12 @@ class IntelligenceGateway:
                         provider.provider_id,
                         "provider_error",
                     )
+                self._record_usage(
+                    request_id=request_id,
+                    request=request,
+                    provider_id=provider.provider_id,
+                    status="failed",
+                )
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
@@ -269,6 +292,49 @@ class IntelligenceGateway:
                     )
 
         raise GatewayUnavailable("all eligible providers failed")
+
+    def _record_usage(
+        self,
+        *,
+        request_id: str,
+        request: GatewayRequest,
+        provider_id: str,
+        status: str,
+        output_usage: dict[str, int] | None = None,
+    ) -> None:
+        if self._usage_ledger is None:
+            return
+        task_id = str(request.metadata.get("task_id") or request_id)
+        self._usage_ledger.record(
+            UsageEvent(
+                task_id=task_id,
+                resource_id=provider_id,
+                capability=request.capability,
+                metric="llm_calls",
+                quantity=1,
+                virtual_cost=1,
+                metadata={
+                    "status": status,
+                    "request_id": request_id,
+                },
+            )
+        )
+        total_tokens = (output_usage or {}).get("total_tokens")
+        if isinstance(total_tokens, (int, float)) and total_tokens >= 0:
+            self._usage_ledger.record(
+                UsageEvent(
+                    task_id=task_id,
+                    resource_id=provider_id,
+                    capability=request.capability,
+                    metric="tokens",
+                    quantity=float(total_tokens),
+                    virtual_cost=0,
+                    metadata={
+                        "status": status,
+                        "request_id": request_id,
+                    },
+                )
+            )
 
 
 @dataclass
