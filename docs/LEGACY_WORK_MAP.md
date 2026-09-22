@@ -48,6 +48,7 @@ This map records what already exists before new architecture work is created. Gi
 | Researcher machine-policy gate | Researcher/Cantiere | PR #542 | OPEN; one Windows run cancelled, other major CI green | Converge after current-main compatibility check | #535–#540 |
 | Module Library UI/status integration | Library | current main `features/module_library` | COMPLETE/ongoing | REUSE canonical Library as source of certified availability | Library data |
 | Durable memory records/store | Memory work | current main `core/memory/assistant_durable_memory*` | COMPLETE foundation | REUSE as local backend candidate for Memory Fabric | SQLite/persistence |
+| AIrLab Memory Fabric V1 | Memory Fabric 02 | PR #20 / `airlab-memory-fabric-v1` | OPEN; implementation + tests in review | Canonical provider-neutral facade; converge parent adapters after merge | existing durable memory, Cantiere state, Supabase deployment |
 | Application-facing durable memory service | Memory work | PR #522 | OPEN | Converge; do not invent a second confirmed/candidate memory service | durable store |
 | Conversation/semantic memory | Assistant memory | current main `ConversationMemoryService`, semantic index | PARTIAL/shared candidate | Adapter behind Memory Fabric, keep Assistant behavior stable | embeddings/index |
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
@@ -101,7 +102,7 @@ The following are historical inputs, not code sources to revive directly:
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts do not yet exist**: capability, provider, route decision, usage/accounting, memory provenance and execution correlation.
+1. **P0 shared contracts remain incomplete**: capability, provider, route decision, usage/accounting and execution correlation are still missing; Memory Fabric provenance/provider-neutral contracts are now OPEN in PR #20 until merged.
 2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
 3. **No generic provider-health/quota Resource Pool exists in AIrLab**.
 4. **No generic accounting event contract exists**.
