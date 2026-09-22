@@ -193,9 +193,9 @@ A capability definition must be able to describe:
 
 Task families such as `web.build` remain user/product-level work categories. Capabilities describe the resources needed to execute them.
 
-## 6. Provider Registry
+## 6. Provider / Resource Registry
 
-A provider is an implementation of one or more capabilities.
+A provider is an implementation of one or more capabilities. In the converged V1 architecture, `airlab.resources.ResourceRegistry` is the canonical source for schedulability, usage class, free-tier policy, live health and multi-metric quota. The Intelligence Gateway keeps a narrower execution registry for invocation metadata and short-lived circuit/rate state; it does not replace the Resource Pool.
 
 Required provider metadata:
 
@@ -387,11 +387,11 @@ Multi-tenant billing and SLA are deferred until after the 0 EUR MVP works end to
 | Diagnostics port | Implemented | Bridge to existing Diagnostics |
 | Cantiere staging/review | Implemented in AI-Orchestrator | Reuse, never duplicate |
 | capability registry | Implemented in Intelligence Gateway V1 | Keep provider-neutral and mirror into Shared Core |
-| provider registry | Implemented in Intelligence Gateway V1 | Adapt parent Cloud catalog; do not duplicate adapters |
+| provider/resource registry | Resource Pool V1 + merged Gateway V1 | `ResourceRegistry` is canonical scheduling state; Gateway keeps execution bindings/circuit state |
 | model/tool router | Intelligence router implemented for model capabilities | Extend additively to tool/build capabilities |
-| provider health/quota | Implemented V1 state/cooldown/rate/quota core | Add provider-reported quota refresh and durable history |
-| resource accounting | Missing in AIrLab | P0 |
-| durable Memory Fabric | Partial elsewhere | P0 contract, adapter reuse |
+| provider health/quota | Resource Pool V1 state manager + Memory Fabric persistence | Add authenticated provider probes; Gateway outcomes flow through the shared state manager |
+| resource accounting | `UsageEvent` / `UsageLedger` + `MemoryUsageEventStore` implemented | Reuse canonical event contract; add monetary FinOps mapping later |
+| durable Memory Fabric | Memory Fabric V1 merged | Reuse as provider/resource state and usage persistence; do not replace local memory |
 | build.web worker | Not an AIrLab capability yet | P1 |
 | build.android worker | Existing ecosystem/CI pieces | P1 after web |
 | artifact store abstraction | Partial | P1 |
@@ -601,14 +601,12 @@ Accepted. Share schemas/interfaces/state vocabulary first; avoid premature monor
 
 ## 21. Immediate next architectural gate
 
-The P0 Contract Pack is now **partially implemented by Intelligence Gateway V1**. The remaining shared contracts are:
+The P0 Contract Pack is now split across merged shared cores. Gateway V1 provides `CapabilityDescriptor`, execution-provider bindings, `ProviderHealth`, `RouteRequest` and `RouteDecision`; Memory Fabric provides memory provenance/provider-neutral persistence; Free Resource Pool provides `ResourceDescriptor`, `ResourceStateSnapshot`, quota/health policy and `UsageEvent`.
 
-1. `ResourceBudget`
-2. `UsageEvent`
-3. `MemoryScope / MemoryRecord provenance`
-4. `ExecutionCorrelation / idempotency key`
+The remaining cross-cutting contracts are:
 
-Already implemented in Gateway V1: `CapabilityDescriptor`, `ProviderDescriptor`, `ProviderHealth`, `RouteRequest` and `RouteDecision`.
+1. `ResourceBudget` / future monetary FinOps policy beyond V1 virtual accounting;
+2. `ExecutionCorrelation / idempotency key` for durable remote execution.
 
 These contracts must be defined before wiring real LLM providers into AIrLab.
 

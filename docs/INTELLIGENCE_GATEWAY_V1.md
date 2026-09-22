@@ -1,6 +1,6 @@
 # Intelligence Gateway V1
 
-Status: **implementation branch**
+Status: **merged V1 + Resource Pool convergence hardening**
 
 Baseline:
 - AIrLab Architecture V1 main after PR #12: `f3d52d2c91c437e437e12872030495dd719d2ed6`
@@ -30,9 +30,11 @@ Application code requests a capability. It does not select NVIDIA, OpenRouter, C
 
 Capability descriptors carry minimum context, preferred/fallback model hints, latency ceiling, commercial-use policy, free-only policy and privacy requirements.
 
-## Provider registry
+## Provider / Resource registry boundary
 
-Provider descriptors carry:
+`airlab.resources.ResourceRegistry` is the canonical scheduling source for real providers: capability class, usage class, free-tier eligibility, live health and multi-metric quota. Gateway `ProviderRegistry` is deliberately narrower: invocation metadata plus short-lived execution/circuit state. `ResourcePoolBridge` maps the fine-grained Gateway capability vocabulary onto Resource Pool capability classes and makes the Resource Pool eligibility decision authoritative before Gateway quality/latency scoring.
+
+Gateway execution descriptors carry:
 
 - provider id, endpoint/adapter and model;
 - capabilities and context window;
@@ -65,7 +67,7 @@ The scoring deliberately reuses semantics already proven in AI-Orchestrator's `C
 
 ## Health, cooldown and circuit breaker
 
-The Provider Registry tracks requests, failures, consecutive failures, observed latency, last failure kind, live quota state and a per-provider requests-per-minute window. Capacity is reserved before a remote call, so a saturated provider can be skipped without spending a failed request.
+The Gateway execution registry tracks requests, failures, consecutive failures, observed latency, last failure kind and a short-lived requests-per-minute/circuit window. Canonical real-provider health/quota belongs to Resource Pool. Gateway outcomes are applied through `ResourcePoolStateManager`, so a configured `MemoryResourceStateStore` persists health, latency and cooldown observations through Memory Fabric.
 
 Initial V1 cooldowns mirror the parent Cloud behavior where applicable:
 
@@ -87,7 +89,7 @@ Each execution records structured technical events:
 - `intelligence_provider_succeeded`
 - `intelligence_provider_skipped`
 
-Raw prompt text is not emitted.
+Raw prompt text is not emitted. Resource usage is represented by the shared `UsageEvent` contract; Gateway can write both the in-memory reference ledger and a durable `MemoryUsageEventStore` without changing the routing API.
 
 The minimum V1 proof is covered by tests: provider A is selected, fails with a retryable timeout, provider B is used, a valid response is returned, and route/fallback events are recorded.
 
@@ -145,8 +147,8 @@ Not introduced:
 
 ## Next migration ring
 
-1. add a provider-template adapter from AI-Orchestrator CloudProviderCatalog semantics;
-2. wire the first real free provider behind the registry without changing the public API;
-3. connect provider-reported quota refresh / Retry-After metadata to the V1 live quota API;
+1. add authenticated provider probes/adapters that update canonical `ResourceStateSnapshot` values;
+2. wire the first real free provider through a `ProviderBinding` without changing the public API;
+3. ingest provider-reported quota and `Retry-After` into Resource Pool state rather than inventing Gateway-only quota fields;
 4. expose the Gateway to AI-Orchestrator ONLINE mode while preserving Local llama.cpp OFFLINE mode;
-5. then add consensus/multi-model execution for only the capabilities that require it.
+5. add consensus/multi-model execution only for capabilities that require it.

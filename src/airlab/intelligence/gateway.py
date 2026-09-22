@@ -25,6 +25,10 @@ class DiagnosticsSink(Protocol):
     def emit(self, event: str, fields: dict[str, object]) -> None: ...
 
 
+class UsageEventStore(Protocol):
+    def save(self, event: UsageEvent) -> None: ...
+
+
 class IntelligenceProvider(Protocol):
     @property
     def provider_id(self) -> str: ...
@@ -61,6 +65,7 @@ class IntelligenceGateway:
         diagnostics: DiagnosticsSink,
         resource_pool: ResourcePoolBridge | None = None,
         usage_ledger: UsageLedger | None = None,
+        usage_store: UsageEventStore | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._providers = providers
@@ -68,6 +73,7 @@ class IntelligenceGateway:
         self._diagnostics = diagnostics
         self._resource_pool = resource_pool
         self._usage_ledger = usage_ledger
+        self._usage_store = usage_store
         self._router = IntelligenceRouter(
             capabilities=capabilities,
             providers=providers,
@@ -159,7 +165,10 @@ class IntelligenceGateway:
                 latency_ms = int((time.monotonic() - started) * 1000)
                 self._providers.record_success(provider.provider_id, latency_ms)
                 if self._resource_pool is not None:
-                    self._resource_pool.record_success(provider.provider_id)
+                    self._resource_pool.record_success(
+                        provider.provider_id,
+                        latency_ms=latency_ms,
+                    )
                 self._record_usage(
                     request_id=request_id,
                     request=request,
@@ -204,7 +213,12 @@ class IntelligenceGateway:
                     retry_after_seconds=exc.retry_after_seconds,
                 )
                 if self._resource_pool is not None:
-                    self._resource_pool.record_failure(provider.provider_id, exc.kind)
+                    self._resource_pool.record_failure(
+                        provider.provider_id,
+                        exc.kind,
+                        latency_ms=latency_ms,
+                        retry_after_seconds=exc.retry_after_seconds,
+                    )
                 self._record_usage(
                     request_id=request_id,
                     request=request,
@@ -254,6 +268,7 @@ class IntelligenceGateway:
                     self._resource_pool.record_failure(
                         provider.provider_id,
                         "provider_error",
+                        latency_ms=latency_ms,
                     )
                 self._record_usage(
                     request_id=request_id,
@@ -302,10 +317,10 @@ class IntelligenceGateway:
         status: str,
         output_usage: dict[str, int] | None = None,
     ) -> None:
-        if self._usage_ledger is None:
+        if self._usage_ledger is None and self._usage_store is None:
             return
         task_id = str(request.metadata.get("task_id") or request_id)
-        self._usage_ledger.record(
+        self._save_usage_event(
             UsageEvent(
                 task_id=task_id,
                 resource_id=provider_id,
@@ -321,7 +336,7 @@ class IntelligenceGateway:
         )
         total_tokens = (output_usage or {}).get("total_tokens")
         if isinstance(total_tokens, (int, float)) and total_tokens >= 0:
-            self._usage_ledger.record(
+            self._save_usage_event(
                 UsageEvent(
                     task_id=task_id,
                     resource_id=provider_id,
@@ -335,6 +350,12 @@ class IntelligenceGateway:
                     },
                 )
             )
+
+    def _save_usage_event(self, event: UsageEvent) -> None:
+        if self._usage_ledger is not None:
+            self._usage_ledger.record(event)
+        if self._usage_store is not None:
+            self._usage_store.save(event)
 
 
 @dataclass
