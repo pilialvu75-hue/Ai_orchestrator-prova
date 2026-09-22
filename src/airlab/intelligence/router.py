@@ -48,7 +48,7 @@ class IntelligenceRouter:
             health = self._providers.health(provider.provider_id)
             failures = self._rejection_reasons(
                 provider=provider,
-                health_state=health.state,
+                health=health,
                 minimum_context=minimum_context,
                 capability=capability,
                 request=request,
@@ -88,8 +88,8 @@ class IntelligenceRouter:
             score -= max(0.0, min(1.0, provider.historical_error_rate)) * 100.0
             score += max(0.0, 100.0 - float(provider.priority))
 
-            if provider.quota_remaining is not None:
-                score += min(50.0, max(0.0, provider.quota_remaining))
+            if health.quota_remaining is not None:
+                score += min(50.0, max(0.0, health.quota_remaining))
                 reasons.append("quota")
 
             candidates.append(
@@ -111,7 +111,7 @@ class IntelligenceRouter:
     def _rejection_reasons(
         *,
         provider,
-        health_state: str,
+        health,
         minimum_context: int,
         capability,
         request: RouteRequest,
@@ -119,8 +119,8 @@ class IntelligenceRouter:
         failures: list[str] = []
         policy = request.policy
 
-        if health_state not in {"healthy", "degraded"}:
-            failures.append(f"health:{health_state}")
+        if health.state not in {"healthy", "degraded"}:
+            failures.append(f"health:{health.state}")
         if provider.context_window < minimum_context:
             failures.append("context_window")
         if policy.environment not in provider.allowed_environments:
@@ -144,7 +144,7 @@ class IntelligenceRouter:
             and provider.access_class not in _FREE_ACCESS
         ):
             failures.append("spend_policy")
-        if provider.quota_remaining is not None and provider.quota_remaining <= 0:
+        if health.quota_remaining is not None and health.quota_remaining <= 0:
             failures.append("quota_exhausted")
 
         max_latency = capability.max_acceptable_latency_ms
