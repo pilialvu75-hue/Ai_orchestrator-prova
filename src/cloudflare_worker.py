@@ -12,17 +12,18 @@ from airlab.adapters.null_integrations import (
     NullResearcher,
 )
 from airlab.cloudflare_api import dispatch_cloudflare_request
+from airlab.intelligence.gateway import create_control_gateway
 from airlab.service import BuilderService
 
 
-# One deterministic service instance per Worker isolate. A real LLM/provider is
-# intentionally NOT wired here; the same certified mock engine remains active.
+_DIAGNOSTICS = MemoryDiagnostics()
 _SERVICE = BuilderService(
     engine=MockBuilderEngine(),
     library=NullModuleLibrary(),
     researcher=NullResearcher(),
-    diagnostics=MemoryDiagnostics(),
+    diagnostics=_DIAGNOSTICS,
 )
+_GATEWAY = create_control_gateway(_DIAGNOSTICS)
 
 
 class Default(WorkerEntrypoint):
@@ -45,6 +46,7 @@ class Default(WorkerEntrypoint):
             authorization=authorization,
             body=body,
             auth_token=str(auth_token) if auth_token is not None else None,
+            gateway=_GATEWAY,
         )
 
         return Response(
