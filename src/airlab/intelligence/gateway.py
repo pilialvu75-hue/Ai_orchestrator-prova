@@ -168,7 +168,7 @@ class IntelligenceGateway:
                             "request_id": request_id,
                             "from_provider_id": provider.provider_id,
                             "to_provider_id": decision.candidates[index + 1].provider_id,
-                            "failure_kind": "rate_limit",
+                            "failure_kind": failure_kind,
                         },
                     )
                 continue
