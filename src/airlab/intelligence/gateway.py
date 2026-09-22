@@ -15,6 +15,7 @@ from .contracts import (
     RouteRequest,
 )
 from .registry import CapabilityRegistry, ProviderRegistry, default_capability_registry
+from .resource_pool import ResourcePoolBridge
 from .router import IntelligenceRouter, RoutingError
 
 
@@ -56,14 +57,17 @@ class IntelligenceGateway:
         providers: ProviderRegistry,
         adapters: list[IntelligenceProvider],
         diagnostics: DiagnosticsSink,
+        resource_pool: ResourcePoolBridge | None = None,
     ) -> None:
         self._capabilities = capabilities
         self._providers = providers
         self._adapters = {adapter.provider_id: adapter for adapter in adapters}
         self._diagnostics = diagnostics
+        self._resource_pool = resource_pool
         self._router = IntelligenceRouter(
             capabilities=capabilities,
             providers=providers,
+            resource_pool=resource_pool,
         )
 
     def capabilities_snapshot(self) -> list[dict[str, object]]:
@@ -150,6 +154,8 @@ class IntelligenceGateway:
                 output = adapter.complete(request, model=provider.model)
                 latency_ms = int((time.monotonic() - started) * 1000)
                 self._providers.record_success(provider.provider_id, latency_ms)
+                if self._resource_pool is not None:
+                    self._resource_pool.record_success(provider.provider_id)
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
@@ -186,6 +192,8 @@ class IntelligenceGateway:
                     latency_ms=latency_ms,
                     retry_after_seconds=exc.retry_after_seconds,
                 )
+                if self._resource_pool is not None:
+                    self._resource_pool.record_failure(provider.provider_id, exc.kind)
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
@@ -225,6 +233,11 @@ class IntelligenceGateway:
                     message=type(exc).__name__,
                     latency_ms=latency_ms,
                 )
+                if self._resource_pool is not None:
+                    self._resource_pool.record_failure(
+                        provider.provider_id,
+                        "provider_error",
+                    )
                 attempts.append(
                     GatewayAttempt(
                         provider_id=provider.provider_id,
