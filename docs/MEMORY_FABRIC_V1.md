@@ -1,6 +1,6 @@
 # AIrLab Memory Fabric V1
 
-Status: implementation branch `airlab-memory-fabric-v1`  
+Status: **MERGED / Memory Fabric V1 baseline** — PR #20, `main@eac00c43a06e1a762bba78b8aa77d457d8fa03c9`  
 Baseline date: 2026-09-22
 
 ## Goal
@@ -27,12 +27,14 @@ GitHub remains the source of truth.
 `Ai-orchestrator-riserva` already contains:
 
 - `core/memory/memory_provider.dart`: legacy conversation/context provider. Useful, but its contract is narrower than the canonical Memory Fabric contract.
-- `core/memory/assistant_durable_memory.dart` and store: bounded durable facts/state with candidate/confirmed semantics.
+- `core/memory/assistant_durable_memory.dart` and store: bounded durable facts/state with candidate/confirmed semantics; the concrete local persistence uses `DatabaseHelper` through the SQLite-backed preference boundary.
 - `ConversationMemoryService` + `RollingContextBuilder`: current Assistant conversation/context pipeline.
 - SQLite project memory domain/data layers.
 - `SyncManager` + CRDT/HLC local-first synchronization.
 - Cantiere persistent checkpoints and execution journals.
 - Library persistence and Researcher/Cantiere lifecycle integrations.
+- `WorkshopReuseLibraryStore` and `WorkshopReuseSourceSnapshotStore`: versioned descriptor/index persistence in `PreferencesService`; source files and produced artifacts stay in their existing storage layers.
+- `GitHubDiagnosticsResearchStatusSource`: current Researcher progress projection reads validated Diagnostics release events; the audit found no separate canonical local Researcher database to migrate.
 
 Open parent work that must not be duplicated:
 
@@ -204,9 +206,9 @@ Real Supabase verification remains pending until a project is visible to the Sup
 
 ## Next convergence steps
 
-1. Run AIrLab CI on this branch.
-2. Fix any contract/test failures.
-3. Open Memory Fabric V1 PR.
-4. When a Supabase project becomes visible, convert the reference schema into a generated migration, apply it, run security/performance advisors and execute a real write/read/restart smoke test.
-5. Build the AI-Orchestrator adapter over existing durable memory + CRDT instead of replacing them.
-6. Add the future NAS provider behind the same provider contract.
+1. Build the AI-Orchestrator shared-core adapter/contract over existing durable memory + CRDT instead of replacing them, while avoiding open memory PRs #522/#526.
+2. Keep Cantiere checkpoint/recovery authoritative and expose only durable project projections/evidence to Memory Fabric.
+3. When a Supabase project becomes visible, convert the reference schema into a generated migration, apply it, run security/performance advisors and execute a real write/read/restart smoke test.
+4. Add a local/offline provider that reuses the existing SQLite/CRDT primitives.
+5. Add the future NAS provider behind the same provider contract.
+6. Exercise mixed-node resilience: cloud down, LAN down, network down, conflicts, partial replication and corrupted replicas.
