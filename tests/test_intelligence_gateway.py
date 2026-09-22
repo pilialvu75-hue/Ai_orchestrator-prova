@@ -66,6 +66,8 @@ def descriptor(
     *,
     priority: int,
     commercial: bool = True,
+    rate_limit_per_minute: int | None = None,
+    quota_remaining: float | None = None,
 ) -> ProviderDescriptor:
     return ProviderDescriptor(
         provider_id=provider_id,
@@ -73,6 +75,8 @@ def descriptor(
         model=f"{provider_id}-model",
         capabilities=frozenset({"architecture"}),
         context_window=64_000,
+        rate_limit_per_minute=rate_limit_per_minute,
+        quota_remaining=quota_remaining,
         expected_latency_ms=100,
         usage_rights="test",
         allowed_environments=frozenset(
@@ -253,6 +257,63 @@ class IntelligenceGatewayTest(unittest.TestCase):
                     ),
                 )
             )
+
+    def test_rate_limit_capacity_is_enforced_before_second_remote_call(self) -> None:
+        diagnostics = Diagnostics()
+        providers = ProviderRegistry(
+            [descriptor("provider-b", priority=0, rate_limit_per_minute=1)]
+        )
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=providers,
+            adapters=[WorkingProvider()],
+            diagnostics=diagnostics,
+        )
+
+        first = gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="first"),),
+            )
+        )
+        self.assertEqual(first.provider_id, "provider-b")
+
+        with self.assertRaises(GatewayUnavailable):
+            gateway.complete(
+                GatewayRequest(
+                    capability="architecture",
+                    messages=(GatewayMessage(role="user", content="second"),),
+                )
+            )
+
+        health = providers.health("provider-b")
+        self.assertEqual(health.state, "rate_limited")
+        self.assertEqual(health.requests_in_rate_window, 1)
+
+    def test_live_quota_update_removes_provider_from_route(self) -> None:
+        diagnostics = Diagnostics()
+        providers = ProviderRegistry(
+            [descriptor("provider-b", priority=0, quota_remaining=10)]
+        )
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=providers,
+            adapters=[WorkingProvider()],
+            diagnostics=diagnostics,
+        )
+
+        providers.update_quota("provider-b", 0, reset_after_seconds=60)
+        with self.assertRaises(GatewayUnavailable):
+            gateway.complete(
+                GatewayRequest(
+                    capability="architecture",
+                    messages=(GatewayMessage(role="user", content="quota"),),
+                )
+            )
+
+        snapshot = providers.public_snapshot()[0]
+        self.assertEqual(snapshot["health"]["state"], "quota_exhausted")
+        self.assertEqual(snapshot["health"]["quota_remaining"], 0)
 
     def test_public_response_hides_provider_selection(self) -> None:
         diagnostics = Diagnostics()
