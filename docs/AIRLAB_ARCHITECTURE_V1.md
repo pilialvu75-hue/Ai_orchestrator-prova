@@ -142,12 +142,25 @@ Cross-cutting:
 
 The Capability Registry is the central provider-neutral vocabulary.
 
-Initial capability namespace:
+The platform has two capability layers so product orchestration and model routing do not become one overloaded namespace.
 
-- `llm.reasoning`
-- `llm.coding`
-- `llm.review`
-- `llm.summarize`
+**Intelligence Gateway V1 capabilities** (used by model/provider routing):
+
+- `chat.general`
+- `reasoning.fast`
+- `reasoning.deep`
+- `coding.generate`
+- `coding.review`
+- `coding.debug`
+- `architecture`
+- `summarize`
+- `classify`
+- `long_context`
+- `research`
+- `vision`
+
+**Platform/service capabilities** remain broader orchestration contracts:
+
 - `research.search`
 - `library.lookup`
 - `memory.read`
@@ -161,6 +174,8 @@ Initial capability namespace:
 - `build.macos`
 - `project.track`
 - `analytics.event`
+
+Historical coarse `llm.reasoning`, `llm.coding`, `llm.review` and `llm.summarize` names are superseded at the Intelligence Gateway boundary by the finer-grained V1 vocabulary above. They must not create a parallel registry.
 
 A capability definition must be able to describe:
 
@@ -371,10 +386,10 @@ Multi-tenant billing and SLA are deferred until after the 0 EUR MVP works end to
 | Researcher lookup port | Implemented, null adapter in Worker | Connect existing Researcher |
 | Diagnostics port | Implemented | Bridge to existing Diagnostics |
 | Cantiere staging/review | Implemented in AI-Orchestrator | Reuse, never duplicate |
-| capability registry | Missing | P0 |
-| provider registry | Missing | P0 |
-| model/tool router | Missing | P0 |
-| provider health/quota | Partial elsewhere | P0 shared contract |
+| capability registry | Implemented in Intelligence Gateway V1 | Keep provider-neutral and mirror into Shared Core |
+| provider registry | Implemented in Intelligence Gateway V1 | Adapt parent Cloud catalog; do not duplicate adapters |
+| model/tool router | Intelligence router implemented for model capabilities | Extend additively to tool/build capabilities |
+| provider health/quota | Implemented V1 state/cooldown/rate/quota core | Add provider-reported quota refresh and durable history |
 | resource accounting | Missing in AIrLab | P0 |
 | durable Memory Fabric | Partial elsewhere | P0 contract, adapter reuse |
 | build.web worker | Not an AIrLab capability yet | P1 |
@@ -586,17 +601,14 @@ Accepted. Share schemas/interfaces/state vocabulary first; avoid premature monor
 
 ## 21. Immediate next architectural gate
 
-The next gate is **P0 Contract Pack**:
+The P0 Contract Pack is now **partially implemented by Intelligence Gateway V1**. The remaining shared contracts are:
 
-1. `CapabilityDescriptor`
-2. `ProviderDescriptor`
-3. `ProviderHealth`
-4. `ResourceBudget`
-5. `RouteRequest`
-6. `RouteDecision`
-7. `UsageEvent`
-8. `MemoryScope / MemoryRecord provenance`
-9. `ExecutionCorrelation / idempotency key`
+1. `ResourceBudget`
+2. `UsageEvent`
+3. `MemoryScope / MemoryRecord provenance`
+4. `ExecutionCorrelation / idempotency key`
+
+Already implemented in Gateway V1: `CapabilityDescriptor`, `ProviderDescriptor`, `ProviderHealth`, `RouteRequest` and `RouteDecision`.
 
 These contracts must be defined before wiring real LLM providers into AIrLab.
 
