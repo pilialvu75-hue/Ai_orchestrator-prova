@@ -124,6 +124,27 @@ class IntelligenceGateway:
                 )
                 continue
 
+            if not self._providers.reserve_request(provider.provider_id):
+                self._diagnostics.emit(
+                    "intelligence_provider_skipped",
+                    {
+                        "request_id": request_id,
+                        "provider_id": provider.provider_id,
+                        "reason": "capacity_exhausted",
+                    },
+                )
+                if index + 1 < len(decision.candidates):
+                    self._diagnostics.emit(
+                        "intelligence_fallback",
+                        {
+                            "request_id": request_id,
+                            "from_provider_id": provider.provider_id,
+                            "to_provider_id": decision.candidates[index + 1].provider_id,
+                            "failure_kind": "rate_limit",
+                        },
+                    )
+                continue
+
             started = time.monotonic()
             try:
                 output = adapter.complete(request, model=provider.model)
