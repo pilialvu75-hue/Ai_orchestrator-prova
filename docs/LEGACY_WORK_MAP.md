@@ -2,7 +2,7 @@
 
 Status: **historical baseline / migration coordination**
 Baseline date: **2026-09-22**
-AIrLab main: `037a64bbfb948fd6992ab65e24017e91c1105291`
+AIrLab main at convergence audit: `ed2724b172580d334b86b1a254b8466e5549a65f`
 AI-Orchestrator main: `8e112c9bfdd9ff14efa460e33d6696882f93e3db`
 
 This map records what already exists before new architecture work is created. GitHub `main` is authoritative; historical chats are useful only when consistent with the current repositories.
@@ -47,7 +47,10 @@ This map records what already exists before new architecture work is created. Gi
 | Researcher validation lifecycle | Researcher/Cantiere | PR #539/#540 merged | COMPLETE | REUSE; stable Library stays isolated | Reviewer/validation |
 | Researcher machine-policy gate | Researcher/Cantiere | PR #542 | OPEN; one Windows run cancelled, other major CI green | Converge after current-main compatibility check | #535–#540 |
 | Module Library UI/status integration | Library | current main `features/module_library` | COMPLETE/ongoing | REUSE canonical Library as source of certified availability | Library data |
+| Workshop reuse descriptor persistence | Library/Cantiere | `WorkshopReuseLibraryStore` + `WorkshopReuseSourceSnapshotStore` | COMPLETE local descriptor/index persistence | REUSE; publish selected validated knowledge into Memory Fabric, never move source/artifact ownership into memory | PreferencesService + snapshot/artifact storage |
+| Researcher progress persistence/projection | Researcher/Diagnostics | `GitHubDiagnosticsResearchStatusSource` reads Diagnostics releases/events | COMPLETE read projection; no separate canonical local Researcher DB found | REUSE Diagnostics evidence as source; persist only selected validated Research Knowledge records | Diagnostics release/event schema |
 | Durable memory records/store | Memory work | current main `core/memory/assistant_durable_memory*` | COMPLETE foundation | REUSE as local backend candidate for Memory Fabric | SQLite/persistence |
+| AIrLab Memory Fabric V1 | Memory Fabric 02 | PR #20 merged; `main@eac00c43` | COMPLETE contract/core; CI + Worker smoke green; real Supabase deployment VERIFY_RUNTIME | REUSE canonical provider-neutral facade; converge parent adapters without replacing local memory | existing durable memory, Cantiere state, Supabase project |
 | Application-facing durable memory service | Memory work | PR #522 | OPEN | Converge; do not invent a second confirmed/candidate memory service | durable store |
 | Conversation/semantic memory | Assistant memory | current main `ConversationMemoryService`, semantic index | PARTIAL/shared candidate | Adapter behind Memory Fabric, keep Assistant behavior stable | embeddings/index |
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
@@ -63,7 +66,7 @@ This map records what already exists before new architecture work is created. Gi
 | Windows/Linux/macOS/Android platform builds | platform chats | parent repo workflows | PARTIAL/ongoing per platform | consume as build workers, do not make platform branches architectural dependencies | CI health |
 | Web/PWA public product layer | Web/AIrLab | planning + Cloudflare foundation | PARTIAL | implement after P0 contract pack and web-build worker | auth/router/artifacts |
 | CAD/manufacturing real engines | AIrLab task-family design | contracts only | DEFERRED | keep schemas; real kernels/slicers are P2 after software/web MVP | tool/provider registry |
-| Supabase shared persistence | plugin/project direction | external service connected | PARTIAL/not AIrLab core | future Memory/Project/Artifact backend adapter; additive only | schema/auth |
+| Supabase shared persistence | Memory Fabric 02 | PR #20 adapter + reference schema; connector currently exposes no project | PARTIAL: adapter/schema COMPLETE, deployment VERIFY_RUNTIME | additive cloud node only; generate/apply real migration when a project is visible | Supabase project, auth/RLS |
 | NAS/home node | architecture direction | no current production adapter | DEFERRED | future provider/storage/build backend; never replace local/cloud | network/health |
 | Cost/accounting core | multiple discussions | no generic AIrLab implementation | MISSING | P0 shared `UsageEvent` + ResourceBudget contract | Provider Registry |
 | Generic Capability Registry | master architecture + Gateway V1 | PR #19 | IMPLEMENTED on Gateway branch | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
@@ -93,6 +96,7 @@ The following are historical inputs, not code sources to revive directly:
 | Cloudflare is the AIrLab backend | Web staging direction | MODIFIED | Cloudflare is one transport/runtime adapter, not a dependency of the core |
 | Library/Researcher should be copied into AIrLab | Ports existed but no copy required | REJECTED | Existing projects remain authoritative and are connected through adapters |
 | Memory = one database | Earlier local/server discussions | SUPERSEDED | Memory Fabric with local + Supabase + future NAS adapters |
+| Memory Fabric = one database | Supabase-first temptation | REJECTED | Supabase is one cloud node; local durable memory remains and NAS/local cache are additive providers |
 | free-first cloud routing | Parent Cloud work | CONFIRMED | Promote semantics into Resource Pool/accounting contracts |
 | deterministic mock is temporary | Initial foundation implication | MODIFIED | Keep permanently as contract oracle and CI provider |
 | real CAD/3D immediately | Early product ambition | DEFERRED | web/software MVP first; retain contracts only |
@@ -101,7 +105,7 @@ The following are historical inputs, not code sources to revive directly:
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts are partially complete in Gateway V1**: capability, provider, health and route decision exist; usage/accounting, memory provenance and execution correlation remain.
+1. **P0 shared contracts are converging**: Memory Fabric provenance/provider-neutral contracts are COMPLETE in merged PR #20; Gateway V1 provides capability/provider/health/route contracts in PR #19; usage/accounting and execution correlation remain.
 2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
 3. **Gateway V1 now has generic provider health/cooldown/rate/quota state**, but provider-specific quota refresh and the wider Resource Pool still need adapters.
 4. **No generic accounting event contract exists**.
