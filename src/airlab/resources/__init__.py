@@ -1,4 +1,4 @@
-from .accounting import UsageEvent, UsageLedger
+from .accounting import UsageEvent, UsageEventSink, UsageLedger
 from .candidates import (
     CandidateStatus,
     ResourceCandidate,
@@ -39,6 +39,7 @@ __all__ = [
     "ResourceStateStore",
     "UsageClass",
     "UsageEvent",
+    "UsageEventSink",
     "UsageLedger",
     "VerificationCheck",
     "VerificationEvidence",
