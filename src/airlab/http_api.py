@@ -90,6 +90,9 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         if not self._guard_auth():
             return
+        if self.path not in {"/v1/tasks", "/v1/chat/completions"}:
+            self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
+            return
         try:
             payload = self._read_json_object()
             if self.path == "/v1/tasks":
@@ -111,7 +114,6 @@ class AirLabRequestHandler(BaseHTTPRequestHandler):
                     chat_completion_response(response),
                 )
                 return
-            self._write_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
         except GatewayUnavailable:
             self._write_json(
                 HTTPStatus.SERVICE_UNAVAILABLE,
