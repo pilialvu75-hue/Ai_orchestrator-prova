@@ -96,6 +96,7 @@ class ResourcePoolStateManager:
             health=snapshot.health,
             last_checked=snapshot.checked_at,
             availability=snapshot.availability,
+            cooldown_until=snapshot.cooldown_until,
             quota=quota,
             latency=(
                 current.latency
