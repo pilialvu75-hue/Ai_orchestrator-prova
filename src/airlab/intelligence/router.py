@@ -132,10 +132,17 @@ class IntelligenceRouter:
             failures.append("privacy")
         if _PRIVACY_RANK[provider.privacy_class] < _PRIVACY_RANK[capability.privacy_requirement]:
             failures.append("capability_privacy")
+        spend_safe_free = (
+            provider.cost_class == "free" or provider.access_class in _FREE_ACCESS
+        )
         if capability.free_only or policy.free_only:
-            if provider.cost_class != "free":
+            if not spend_safe_free:
                 failures.append("free_only")
-        elif not policy.paid_allowed and provider.cost_class in {"paid", "metered", "unknown"}:
+        elif (
+            not policy.paid_allowed
+            and provider.cost_class in {"paid", "metered", "unknown"}
+            and provider.access_class not in _FREE_ACCESS
+        ):
             failures.append("spend_policy")
         if provider.quota_remaining is not None and provider.quota_remaining <= 0:
             failures.append("quota_exhausted")
