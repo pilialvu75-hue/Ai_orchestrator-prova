@@ -19,7 +19,9 @@ from airlab.intelligence.resource_pool import (
 from airlab.resources import (
     ResourceDescriptor,
     ResourceHealth,
+    ResourcePoolStateManager,
     ResourceRegistry,
+    ResourceStateSnapshot,
     UsageClass,
     UsageLedger,
 )
@@ -31,6 +33,30 @@ class Diagnostics:
 
     def emit(self, event: str, fields: dict[str, object]) -> None:
         self.events.append((event, fields))
+
+
+class StateStore:
+    def __init__(self) -> None:
+        self.snapshots: list[ResourceStateSnapshot] = []
+
+    def save(self, snapshot: ResourceStateSnapshot) -> None:
+        self.snapshots.append(snapshot)
+
+    def latest(self, resource_id: str) -> ResourceStateSnapshot | None:
+        matches = [
+            snapshot
+            for snapshot in self.snapshots
+            if snapshot.resource_id == resource_id
+        ]
+        return matches[-1] if matches else None
+
+
+class UsageStore:
+    def __init__(self) -> None:
+        self.events = []
+
+    def save(self, event) -> None:
+        self.events.append(event)
 
 
 class Adapter:
@@ -187,6 +213,70 @@ class IntelligenceResourcePoolTests(unittest.TestCase):
         self.assertEqual(calls["tokens"], 12)
         self.assertEqual(ledger.events[0].task_id, "task-123")
         self.assertNotIn("private prompt", repr(ledger.events))
+
+    def test_gateway_outcomes_flow_through_persistable_resource_state(self) -> None:
+        canonical = ResourceRegistry(
+            [resource("provider-a", health=ResourceHealth.HEALTHY)]
+        )
+        store = StateStore()
+        manager = ResourcePoolStateManager(registry=canonical, store=store)
+        bridge = ResourcePoolBridge(canonical, state_manager=manager)
+        descriptor = provider_descriptor_from_resource(
+            canonical.get("provider-a"),
+            binding("provider-a"),
+        )
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=ProviderRegistry([descriptor]),
+            adapters=[Adapter("provider-a", "ok")],
+            diagnostics=Diagnostics(),
+            resource_pool=bridge,
+        )
+
+        response = gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="design"),),
+            )
+        )
+
+        self.assertEqual(response.text, "ok")
+        self.assertTrue(store.snapshots)
+        latest = store.snapshots[-1]
+        self.assertEqual(latest.resource_id, "provider-a")
+        self.assertEqual(latest.health, ResourceHealth.HEALTHY)
+        self.assertEqual(latest.availability, "request_succeeded")
+        self.assertIsNotNone(latest.latency_ms)
+
+    def test_gateway_can_persist_usage_without_requiring_in_memory_ledger(self) -> None:
+        canonical = ResourceRegistry(
+            [resource("provider-a", health=ResourceHealth.HEALTHY)]
+        )
+        descriptor = provider_descriptor_from_resource(
+            canonical.get("provider-a"),
+            binding("provider-a"),
+        )
+        usage_store = UsageStore()
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=ProviderRegistry([descriptor]),
+            adapters=[Adapter("provider-a", "ok")],
+            diagnostics=Diagnostics(),
+            resource_pool=ResourcePoolBridge(canonical),
+            usage_store=usage_store,
+        )
+
+        gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="private prompt"),),
+                metadata={"task_id": "task-persisted"},
+            )
+        )
+
+        self.assertEqual(len(usage_store.events), 2)
+        self.assertEqual(usage_store.events[0].task_id, "task-persisted")
+        self.assertNotIn("private prompt", repr(usage_store.events))
 
     def test_resource_usage_policy_blocks_development_resource_in_commercial(self) -> None:
         canonical = ResourceRegistry(
