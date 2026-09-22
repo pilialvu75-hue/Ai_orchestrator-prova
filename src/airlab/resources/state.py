@@ -48,7 +48,12 @@ class ResourceStateStore(Protocol):
 
 
 class ResourcePoolStateManager:
-    """Applies authenticated/runtime observations to the static registry."""
+    """Apply runtime observations locally and persist them best-effort.
+
+    The Resource Pool must remain usable when a shared/remote memory node is
+    temporarily unavailable. Persistence errors are retained for diagnostics
+    and later reconciliation instead of being raised through provider calls.
+    """
 
     def __init__(
         self,
@@ -58,6 +63,11 @@ class ResourcePoolStateManager:
     ) -> None:
         self._registry = registry
         self._store = store
+        self._persistence_errors: list[str] = []
+
+    @property
+    def persistence_errors(self) -> tuple[str, ...]:
+        return tuple(self._persistence_errors)
 
     def apply(
         self,
@@ -87,6 +97,7 @@ class ResourcePoolStateManager:
             health=snapshot.health,
             last_checked=snapshot.checked_at,
             availability=snapshot.availability,
+            cooldown_until=snapshot.cooldown_until,
             quota=quota,
             latency=(
                 current.latency
@@ -97,7 +108,10 @@ class ResourcePoolStateManager:
         self._registry.replace(updated)
 
         if persist and self._store is not None:
-            self._store.save(snapshot)
+            try:
+                self._store.save(snapshot)
+            except Exception as exc:
+                self._persistence_errors.append(f"{type(exc).__name__}: {exc}")
 
     def probe(self, probe: ResourceProbe) -> ResourceStateSnapshot:
         snapshot = probe.probe()
@@ -111,7 +125,11 @@ class ResourcePoolStateManager:
     def restore(self, resource_id: str) -> ResourceStateSnapshot | None:
         if self._store is None:
             return None
-        snapshot = self._store.latest(resource_id)
+        try:
+            snapshot = self._store.latest(resource_id)
+        except Exception as exc:
+            self._persistence_errors.append(f"{type(exc).__name__}: {exc}")
+            return None
         if snapshot is not None:
             self.apply(snapshot, persist=False)
         return snapshot
