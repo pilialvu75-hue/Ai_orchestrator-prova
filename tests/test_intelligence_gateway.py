@@ -203,6 +203,57 @@ class IntelligenceGatewayTest(unittest.TestCase):
         self.assertTrue(request.policy.free_only)
         self.assertFalse(request.policy.paid_allowed)
 
+    def test_development_free_access_is_spend_safe_even_when_cost_is_unknown(self) -> None:
+        diagnostics = Diagnostics()
+        provider = ProviderDescriptor(
+            provider_id="provider-b",
+            endpoint="internal://provider-b",
+            model="provider-b-model",
+            capabilities=frozenset({"architecture"}),
+            context_window=64_000,
+            expected_latency_ms=100,
+            usage_rights="development-only",
+            allowed_environments=frozenset({"personal", "development"}),
+            commercial_allowed=False,
+            cost_class="unknown",
+            access_class="development_free",
+            priority=0,
+            quality_score=0.9,
+            privacy_class="no_training",
+        )
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=ProviderRegistry([provider]),
+            adapters=[WorkingProvider()],
+            diagnostics=diagnostics,
+        )
+
+        response = gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="prototype"),),
+                policy=RoutePolicy(
+                    environment="development",
+                    free_only=True,
+                    paid_allowed=False,
+                ),
+            )
+        )
+        self.assertEqual(response.provider_id, "provider-b")
+
+        with self.assertRaises(GatewayUnavailable):
+            gateway.complete(
+                GatewayRequest(
+                    capability="architecture",
+                    messages=(GatewayMessage(role="user", content="commercial"),),
+                    policy=RoutePolicy(
+                        environment="commercial",
+                        free_only=True,
+                        paid_allowed=False,
+                    ),
+                )
+            )
+
     def test_public_response_hides_provider_selection(self) -> None:
         diagnostics = Diagnostics()
         gateway = IntelligenceGateway(
@@ -254,6 +305,19 @@ class IntelligenceGatewayTest(unittest.TestCase):
             "fallback-ok",
         )
         self.assertNotIn("provider_id", result.payload["airlab"])
+
+    def test_cloudflare_unknown_post_route_stays_not_found_without_body(self) -> None:
+        diagnostics = Diagnostics()
+        result = dispatch_cloudflare_request(
+            builder_service(diagnostics),
+            method="POST",
+            path="/private/debug",
+            authorization="Bearer test-token",
+            body=None,
+            auth_token="test-token",
+        )
+        self.assertEqual(result.status, 404)
+        self.assertEqual(result.payload, {"error": "not_found"})
 
 
 if __name__ == "__main__":
