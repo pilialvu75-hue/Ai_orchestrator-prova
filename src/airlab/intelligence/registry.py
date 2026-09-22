@@ -31,6 +31,13 @@ class CapabilityRegistry:
 
 
 class ProviderRegistry:
+    """Gateway execution registry, not the canonical Resource Pool catalog.
+
+    For real providers, static eligibility, usage rights, free-tier state,
+    health and multi-metric quota live in airlab.resources.ResourceRegistry.
+    This registry keeps invocation metadata plus short-lived circuit/rate state.
+    """
+
     _RATE_LIMIT_COOLDOWN_SECONDS = 120.0
     _QUOTA_COOLDOWN_SECONDS = 900.0
     _TEMPORARY_COOLDOWN_SECONDS = 20.0
