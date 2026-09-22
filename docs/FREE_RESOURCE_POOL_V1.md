@@ -54,7 +54,7 @@ provider adapter must update them before automatic selection.
 | Diagnostics / RuntimeEventLog | AI-Orchestrator | Existing | REUSE as local source; Resource Pool emits closed-vocabulary resource/usage events later |
 | PostHog bridge | AI-Orchestrator PR #543 | Open at verification time | DO NOT treat as merged source of truth |
 | Memory Fabric | AIrLab current `main` (`src/airlab/memory/*`) | MERGED during this workstream | REUSE; persist quota/health/accounting through its provider-neutral contract rather than creating storage here |
-| Intelligence Gateway branch | `feat/intelligence-gateway-v1` | Behind current main with no unique commits at verification | Router must consume Resource Pool contracts when rebuilt on current main |
+| Intelligence Gateway V1 | PR #19 merged (`aa3bbb6e`) | Capability-first router + `ResourcePoolBridge` on main | Gateway consumes canonical Resource Pool eligibility/priority; execution registry remains non-canonical |
 | Cloudflare Worker adapter | AIrLab merged PRs #7/#9 | Implemented staging transport | REUSE as host/transport adapter, not hard dependency |
 | Library / Researcher | AI-Orchestrator existing integrations | Existing | REUSE; Researcher may submit candidate resources, never auto-promote them |
 
@@ -271,13 +271,13 @@ usage class, quotas, fallback and evidence of capability/health probing.
 
 P0 continuation:
 
-1. add provider-state probe/adapters that update health and remaining quota;
-2. persist ResourceSnapshot/UsageEvent via Memory Fabric once that contract merges;
-3. expose the same schema to AI-Orchestrator through a Dart/shared-contract adapter;
-4. let the Intelligence Gateway consume `eligible()` rather than fixed provider names;
+1. add authenticated provider-state probes/adapters that update health and remaining quota;
+2. expose the same schema to AI-Orchestrator through a Dart/shared-contract adapter;
+3. persist Gateway-observed provider outcomes through `ResourcePoolStateManager` + Memory Fabric;
+4. persist Gateway usage through the shared `UsageEvent` / `MemoryUsageEventStore` path;
 5. add closed-vocabulary diagnostics for selection, fallback, rate limit and exhaustion;
-6. add the Researcher candidate-validation inbox;
-7. add a read-only resource-status API only after Router/health contracts stabilize.
+6. connect the existing Researcher candidate-validation inbox to validated promotion workflows;
+7. add a read-only resource-status API after Router/health contracts stabilize.
 
 No real provider is automatically enabled merely by appearing in this catalog.
 
@@ -324,3 +324,8 @@ research evidence.
 
 This keeps continuous discovery useful without allowing the Researcher to silently alter
 production routing policy.
+
+
+### Intelligence Gateway convergence
+
+Merged Gateway V1 now maps fine-grained capabilities such as `architecture` and `coding.review` onto Resource Pool classes such as `llm.reasoning` and `llm.review`. Resource Pool `eligible()` is the authoritative schedulability gate; Gateway then applies execution-specific quality and latency scoring. Provider outcomes can flow through `ResourcePoolStateManager`, and usage can flow through `MemoryUsageEventStore`, so no second resource-state or accounting database is required.
