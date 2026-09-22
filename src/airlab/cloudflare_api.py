@@ -105,6 +105,8 @@ def dispatch_cloudflare_request(
         return CloudflareApiResult(status=404, payload={"error": "not_found"})
 
     if normalized_method == "POST":
+        if normalized_path not in {"/v1/tasks", "/v1/chat/completions"}:
+            return CloudflareApiResult(status=404, payload={"error": "not_found"})
         try:
             payload = _decode_json_body(body)
             if normalized_path == "/v1/tasks":
@@ -123,7 +125,6 @@ def dispatch_cloudflare_request(
                     status=200,
                     payload=chat_completion_response(response),
                 )
-            return CloudflareApiResult(status=404, payload={"error": "not_found"})
         except GatewayUnavailable:
             return CloudflareApiResult(
                 status=503,
