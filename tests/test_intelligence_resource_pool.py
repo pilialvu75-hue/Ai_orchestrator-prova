@@ -21,6 +21,7 @@ from airlab.resources import (
     ResourceHealth,
     ResourceRegistry,
     UsageClass,
+    UsageLedger,
 )
 
 
@@ -38,7 +39,11 @@ class Adapter:
         self._text = text
 
     def complete(self, request: GatewayRequest, *, model: str) -> ProviderOutput:
-        return ProviderOutput(text=self._text, model=model)
+        return ProviderOutput(
+            text=self._text,
+            model=model,
+            usage={"total_tokens": 12},
+        )
 
 
 def resource(
@@ -148,6 +153,40 @@ class IntelligenceResourcePoolTests(unittest.TestCase):
             if event == "intelligence_route_decided"
         )
         self.assertIn("resource_priority", route["route_reason"])
+
+    def test_gateway_records_usage_in_canonical_resource_ledger(self) -> None:
+        canonical = ResourceRegistry(
+            [resource("provider-a", health=ResourceHealth.HEALTHY)]
+        )
+        descriptor = provider_descriptor_from_resource(
+            canonical.get("provider-a"),
+            binding("provider-a"),
+        )
+        ledger = UsageLedger()
+        gateway = IntelligenceGateway(
+            capabilities=CapabilityRegistry([CapabilityDescriptor("architecture")]),
+            providers=ProviderRegistry([descriptor]),
+            adapters=[Adapter("provider-a", "ok")],
+            diagnostics=Diagnostics(),
+            resource_pool=ResourcePoolBridge(canonical),
+            usage_ledger=ledger,
+        )
+
+        response = gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="private prompt"),),
+                metadata={"task_id": "task-123"},
+            )
+        )
+
+        self.assertEqual(response.text, "ok")
+        self.assertEqual(len(ledger.events), 2)
+        calls = ledger.usage_by_resource()["provider-a"]
+        self.assertEqual(calls["llm_calls"], 1)
+        self.assertEqual(calls["tokens"], 12)
+        self.assertEqual(ledger.events[0].task_id, "task-123")
+        self.assertNotIn("private prompt", repr(ledger.events))
 
     def test_resource_usage_policy_blocks_development_resource_in_commercial(self) -> None:
         canonical = ResourceRegistry(
