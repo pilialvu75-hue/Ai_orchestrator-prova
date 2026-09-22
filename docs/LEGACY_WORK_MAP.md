@@ -66,9 +66,9 @@ This map records what already exists before new architecture work is created. Gi
 | Supabase shared persistence | plugin/project direction | external service connected | PARTIAL/not AIrLab core | future Memory/Project/Artifact backend adapter; additive only | schema/auth |
 | NAS/home node | architecture direction | no current production adapter | DEFERRED | future provider/storage/build backend; never replace local/cloud | network/health |
 | Cost/accounting core | multiple discussions | no generic AIrLab implementation | MISSING | P0 shared `UsageEvent` + ResourceBudget contract | Provider Registry |
-| Generic Capability Registry | master architecture | no canonical implementation | MISSING | P0, contract-first | task taxonomy |
-| Generic Provider Registry | master architecture | cloud-specific catalog exists | PARTIAL | P0 generalization/adapters | Capability Registry |
-| General Model/Tool Router | master architecture | domain-specific routing exists | PARTIAL | P0 capability-driven router, preserve existing adapters | Provider Registry |
+| Generic Capability Registry | master architecture + Gateway V1 | PR #19 | IMPLEMENTED on Gateway branch | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
+| Generic Provider Registry | master architecture + parent Cloud concepts | PR #19 | IMPLEMENTED core / adapters pending | Reuse cost/access semantics; adapt existing provider implementations | Capability Registry |
+| General Model/Tool Router | master architecture + parent Cloud routing | PR #19 | IMPLEMENTED for intelligence capabilities | Extend additively to tools/build workers; preserve existing adapters | Provider Registry |
 | Durable Orchestrator boundary | master architecture | Cantiere lifecycle exists; remote job contract missing | PARTIAL | define subordinate job correlation/idempotency only | Cantiere lifecycle |
 
 ## Superseded / obsolete lines
@@ -101,9 +101,9 @@ The following are historical inputs, not code sources to revive directly:
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts do not yet exist**: capability, provider, route decision, usage/accounting, memory provenance and execution correlation.
+1. **P0 shared contracts are partially complete in Gateway V1**: capability, provider, health and route decision exist; usage/accounting, memory provenance and execution correlation remain.
 2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
-3. **No generic provider-health/quota Resource Pool exists in AIrLab**.
+3. **Gateway V1 now has generic provider health/cooldown/rate/quota state**, but provider-specific quota refresh and the wider Resource Pool still need adapters.
 4. **No generic accounting event contract exists**.
 5. **Cantiere parking PR #545 is still open** and must converge with the advanced main before Durable Orchestrator semantics are considered stable.
 6. **PostHog #543, Researcher policy #542 and memory service #522 are parallel open work**, so Shared Core extraction must not bypass their canonical contracts.
