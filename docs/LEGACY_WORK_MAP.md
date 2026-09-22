@@ -55,6 +55,8 @@ This map records what already exists before new architecture work is created. Gi
 | Conversation/semantic memory | Assistant memory | current main `ConversationMemoryService`, semantic index | PARTIAL/shared candidate | Adapter behind Memory Fabric, keep Assistant behavior stable | embeddings/index |
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
 | Free-first cloud classification | Cloud work | current main + `docs/cloud/point-1-5-access-classification.md` | COMPLETE foundation | REUSE spend-safety semantics in Resource Pool | cost/access policy |
+| Free Resource Pool V1 | AIrLab 04 | PR #22/#23/#24 merged; `src/airlab/resources/*` | COMPLETE core / real provider probes VERIFY_RUNTIME | REUSE as canonical shared resource registry, health/quota/accounting and candidate gate; never create a second pool | Memory Fabric + Intelligence Gateway |
+| Gateway ↔ Resource Pool bridge | AIrLab 01/04 convergence | PR #19 merged + current convergence ring | COMPLETE contract; persisted runtime-state convergence in progress | Resource Pool owns shared facts; Gateway ProviderRegistry remains execution-local only | Resource Pool + ProviderRegistry + Memory Fabric |
 | OpenRouter free pool integration | Cloud | current main provider catalog/tests | COMPLETE in parent project | REUSE provider adapter/state when AIrLab Router is ready | provider registry |
 | NVIDIA/Mistral free/account-dependent routes | Cloud | current cloud catalog/work | PARTIAL/VERIFY_RUNTIME | add through Resource Pool adapters, not hard-coded routing | quota/auth/health |
 | Cloud routing bootstrap/runtime provider | Cloud | current main | COMPLETE parent implementation | REUSE patterns; extract provider-neutral pieces only | provider catalog/settings |
@@ -68,10 +70,10 @@ This map records what already exists before new architecture work is created. Gi
 | CAD/manufacturing real engines | AIrLab task-family design | contracts only | DEFERRED | keep schemas; real kernels/slicers are P2 after software/web MVP | tool/provider registry |
 | Supabase shared persistence | Memory Fabric 02 | PR #20 adapter + reference schema; connector currently exposes no project | PARTIAL: adapter/schema COMPLETE, deployment VERIFY_RUNTIME | additive cloud node only; generate/apply real migration when a project is visible | Supabase project, auth/RLS |
 | NAS/home node | architecture direction | no current production adapter | DEFERRED | future provider/storage/build backend; never replace local/cloud | network/health |
-| Cost/accounting core | multiple discussions | no generic AIrLab implementation | MISSING | P0 shared `UsageEvent` + ResourceBudget contract | Provider Registry |
-| Generic Capability Registry | master architecture + Gateway V1 | PR #19 | IMPLEMENTED on Gateway branch | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
-| Generic Provider Registry | master architecture + parent Cloud concepts | PR #19 | IMPLEMENTED core / adapters pending | Reuse cost/access semantics; adapt existing provider implementations | Capability Registry |
-| General Model/Tool Router | master architecture + parent Cloud routing | PR #19 | IMPLEMENTED for intelligence capabilities | Extend additively to tools/build workers; preserve existing adapters | Provider Registry |
+| Cost/accounting core | AIrLab 04 / Free Resource Pool | PR #22/#23/#24 merged; `src/airlab/resources/accounting.py` + Memory Fabric persistence | COMPLETE core; monetary pricing adapters later | REUSE `UsageEvent` / `UsageLedger`; persist through Memory Fabric; do not create parallel accounting | Resource Pool + Memory Fabric |
+| Generic Capability Registry | master architecture + Gateway V1 | PR #19 merged | COMPLETE current-main intelligence core | REUSE exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
+| Generic Provider Registry | master architecture + parent Cloud concepts | PR #19 merged | COMPLETE execution-local core / real provider adapters pending | REUSE for Gateway circuit breaker and execution scoring; shared provider truth stays in Resource Pool | Capability Registry + Resource Pool |
+| General Model/Tool Router | master architecture + parent Cloud routing | PR #19 merged | COMPLETE for intelligence capabilities | Extend additively; route through canonical Resource Pool facts rather than a second provider catalog | Provider Registry + Resource Pool bridge |
 | Durable Orchestrator boundary | master architecture | Cantiere lifecycle exists; remote job contract missing | PARTIAL | define subordinate job correlation/idempotency only | Cantiere lifecycle |
 
 ## Superseded / obsolete lines
@@ -98,6 +100,7 @@ The following are historical inputs, not code sources to revive directly:
 | Memory = one database | Earlier local/server discussions | SUPERSEDED | Memory Fabric with local + Supabase + future NAS adapters |
 | Memory Fabric = one database | Supabase-first temptation | REJECTED | Supabase is one cloud node; local durable memory remains and NAS/local cache are additive providers |
 | free-first cloud routing | Parent Cloud work | CONFIRMED | Promote semantics into Resource Pool/accounting contracts |
+| Gateway ProviderRegistry vs Resource Pool | Parallel work initially risked overlapping state | CONVERGED | Resource Pool is canonical shared provider/resource truth; ProviderRegistry is execution-local circuit breaker/quality/latency state and must project outcomes back to Resource Pool |
 | deterministic mock is temporary | Initial foundation implication | MODIFIED | Keep permanently as contract oracle and CI provider |
 | real CAD/3D immediately | Early product ambition | DEFERRED | web/software MVP first; retain contracts only |
 | raw telemetry to remote service | Not required | REJECTED | local Diagnostics authority + privacy-safe optional telemetry |
@@ -105,23 +108,22 @@ The following are historical inputs, not code sources to revive directly:
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts are converging**: Memory Fabric provenance/provider-neutral contracts are COMPLETE in merged PR #20; Gateway V1 provides capability/provider/health/route contracts in PR #19; usage/accounting and execution correlation remain.
-2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
-3. **Gateway V1 now has generic provider health/cooldown/rate/quota state**, but provider-specific quota refresh and the wider Resource Pool still need adapters.
-4. **No generic accounting event contract exists**.
-5. **Cantiere parking PR #545 is still open** and must converge with the advanced main before Durable Orchestrator semantics are considered stable.
-6. **PostHog #543, Researcher policy #542 and memory service #522 are parallel open work**, so Shared Core extraction must not bypass their canonical contracts.
-7. **A6 issue #11 is the next AIrLab/Cantiere production integration step**, but it must remain opt-in and reuse the existing production controller.
+1. **First real provider adapter/probe is still missing in AIrLab**: the canonical Resource Pool and Gateway are implemented, but remote LLM entries remain non-routable until authenticated runtime health/quota is proven.
+2. **Provider-reported quota/reset metadata is not yet normalized end to end**: Retry-After and remaining quota must feed `ResourceStateSnapshot` rather than a second state model.
+3. **AI-Orchestrator still needs the shared/Dart-side adapter** so the parent app can request the same capability/resource contracts without implementing a parallel pool.
+4. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
+5. **Cantiere parking PR #545 and execution correlation/idempotency remain Durable Orchestrator dependencies** and must converge with current main.
+6. **PostHog #543, Researcher policy #542 and memory service #522 remain parallel parent work**; Shared Core integration must reuse whichever contracts are actually merged.
+7. **A6 issue #11 remains the next Cantiere-side production runner step**, opt-in and reusing the existing production controller.
 
-## Migration order
+## Current migration order
 
-1. Freeze Architecture V1 and this Legacy Work Map.
-2. Create the P0 Contract Pack without changing existing runtime behavior.
-3. Adapt existing CloudProviderCatalog/free-first semantics into the generic Provider/Resource contracts.
-4. Adapt existing durable memory into Memory Fabric.
-5. Define Cantiere ↔ AIrLab execution correlation/idempotency.
-6. Connect Library/Researcher/Diagnostics real adapters.
+1. Converge Gateway runtime outcomes and accounting onto the canonical Resource Pool/Memory Fabric.
+2. Add the first real free provider adapter by reusing AI-Orchestrator CloudProviderCatalog semantics.
+3. Add authenticated health/quota/reset probes and snapshot freshness policy.
+4. Expose the same provider/resource capability contract to AI-Orchestrator through a shared/Dart adapter.
+5. Define/finish Cantiere ↔ AIrLab execution correlation and idempotency.
+6. Connect real Library/Researcher/Diagnostics adapters.
 7. Complete A6 production-runner integration.
-8. Add first real free provider through Resource Pool + Router.
-9. Add `build.web` worker and complete the 0 EUR web MVP.
-10. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
+8. Add `build.web` worker and complete the 0 EUR web MVP.
+9. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
