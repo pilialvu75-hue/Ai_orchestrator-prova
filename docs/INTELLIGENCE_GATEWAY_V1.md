@@ -3,7 +3,7 @@
 Status: **implementation branch**
 
 Baseline:
-- AIrLab main: `037a64bbfb948fd6992ab65e24017e91c1105291`
+- AIrLab Architecture V1 main after PR #12: `f3d52d2c91c437e437e12872030495dd719d2ed6`
 - AI-Orchestrator main audited: `8e112c9bfdd9ff14efa460e33d6696882f93e3db`
 - Architecture / Legacy Work Map: PR #12
 
@@ -65,7 +65,7 @@ The scoring deliberately reuses semantics already proven in AI-Orchestrator's `C
 
 ## Health, cooldown and circuit breaker
 
-The Provider Registry tracks requests, failures, consecutive failures, observed latency and last failure kind.
+The Provider Registry tracks requests, failures, consecutive failures, observed latency, last failure kind, live quota state and a per-provider requests-per-minute window. Capacity is reserved before a remote call, so a saturated provider can be skipped without spending a failed request.
 
 Initial V1 cooldowns mirror the parent Cloud behavior where applicable:
 
@@ -147,6 +147,6 @@ Not introduced:
 
 1. add a provider-template adapter from AI-Orchestrator CloudProviderCatalog semantics;
 2. wire the first real free provider behind the registry without changing the public API;
-3. add quota refresh / Retry-After ingestion;
+3. connect provider-reported quota refresh / Retry-After metadata to the V1 live quota API;
 4. expose the Gateway to AI-Orchestrator ONLINE mode while preserving Local llama.cpp OFFLINE mode;
 5. then add consensus/multi-model execution for only the capabilities that require it.
