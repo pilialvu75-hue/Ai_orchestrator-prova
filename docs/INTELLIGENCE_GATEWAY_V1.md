@@ -78,6 +78,14 @@ Initial V1 cooldowns mirror the parent Cloud behavior where applicable:
 
 These are policy constants, not provider-specific hard-coding.
 
+### Execution cooldown convergence
+
+The Gateway computes short-lived circuit/rate cooldowns. The remaining cooldown is projected
+into the canonical Resource Pool instead of starting a second independent timer. Resource
+Pool keeps `RATE_LIMITED` and `DOWN` non-selectable until the deadline and then reopens
+them as `DEGRADED` for controlled retry. `EXHAUSTED` stays blocked until fresh provider
+quota evidence arrives.
+
 ## Fallback and diagnostics
 
 Each execution records structured technical events:
@@ -88,8 +96,9 @@ Each execution records structured technical events:
 - `intelligence_fallback`
 - `intelligence_provider_succeeded`
 - `intelligence_provider_skipped`
+- `intelligence_usage_persistence_failed`
 
-Raw prompt text is not emitted. Resource usage is represented by the shared `UsageEvent` contract; Gateway can write both the in-memory reference ledger and a durable `MemoryUsageEventStore` without changing the routing API.
+Raw prompt text is not emitted. Resource usage is represented by the shared `UsageEvent` contract; Gateway can write both the in-memory reference ledger and a durable `MemoryUsageEventStore` without changing the routing API. Durable usage persistence is best-effort: a memory/storage outage emits `intelligence_usage_persistence_failed` and does not invalidate a successful model response.
 
 The minimum V1 proof is covered by tests: provider A is selected, fails with a retryable timeout, provider B is used, a valid response is returned, and route/fallback events are recorded.
 

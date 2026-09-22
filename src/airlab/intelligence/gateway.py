@@ -139,6 +139,20 @@ class IntelligenceGateway:
                 continue
 
             if not self._providers.reserve_request(provider.provider_id):
+                provider_health = self._providers.health(provider.provider_id)
+                failure_kind: FailureKind = (
+                    "quota"
+                    if provider_health.state == "quota_exhausted"
+                    else "rate_limit"
+                )
+                if self._resource_pool is not None:
+                    self._resource_pool.record_failure(
+                        provider.provider_id,
+                        failure_kind,
+                        retry_after_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
+                    )
                 self._diagnostics.emit(
                     "intelligence_provider_skipped",
                     {
@@ -154,7 +168,7 @@ class IntelligenceGateway:
                             "request_id": request_id,
                             "from_provider_id": provider.provider_id,
                             "to_provider_id": decision.candidates[index + 1].provider_id,
-                            "failure_kind": "rate_limit",
+                            "failure_kind": failure_kind,
                         },
                     )
                 continue
@@ -217,7 +231,9 @@ class IntelligenceGateway:
                         provider.provider_id,
                         exc.kind,
                         latency_ms=latency_ms,
-                        retry_after_seconds=exc.retry_after_seconds,
+                        retry_after_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
                     )
                 self._record_usage(
                     request_id=request_id,
@@ -269,6 +285,9 @@ class IntelligenceGateway:
                         provider.provider_id,
                         "provider_error",
                         latency_ms=latency_ms,
+                        retry_after_seconds=self._providers.cooldown_remaining_seconds(
+                            provider.provider_id
+                        ),
                     )
                 self._record_usage(
                     request_id=request_id,
@@ -355,7 +374,18 @@ class IntelligenceGateway:
         if self._usage_ledger is not None:
             self._usage_ledger.record(event)
         if self._usage_store is not None:
-            self._usage_store.save(event)
+            try:
+                self._usage_store.save(event)
+            except Exception as exc:
+                self._diagnostics.emit(
+                    "intelligence_usage_persistence_failed",
+                    {
+                        "resource_id": event.resource_id,
+                        "capability": event.capability,
+                        "metric": event.metric,
+                        "error_type": type(exc).__name__,
+                    },
+                )
 
 
 @dataclass

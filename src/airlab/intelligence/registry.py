@@ -77,6 +77,13 @@ class ProviderRegistry:
         self._refresh_cooldown(health)
         return health
 
+    def cooldown_remaining_seconds(self, provider_id: str) -> float | None:
+        health = self.health(provider_id)
+        until = health.cooldown_until_monotonic
+        if until is None:
+            return None
+        return max(0.0, until - time.monotonic())
+
     def public_snapshot(self) -> list[dict[str, object]]:
         snapshots: list[dict[str, object]] = []
         for provider in self.all():

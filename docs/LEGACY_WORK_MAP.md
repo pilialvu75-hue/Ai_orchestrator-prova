@@ -2,7 +2,7 @@
 
 Status: **historical baseline / migration coordination**
 Baseline date: **2026-09-22**
-AIrLab main at convergence audit: `3cb6995964cd3c9843e9b13cdd9ce51970b0fb26`
+AIrLab main at resilience-ring start: `fec3f5ed0186989b6235195f97f9510def1e5539` (Gateway/Resource Pool convergence #25 merged)
 AI-Orchestrator main: `8e112c9bfdd9ff14efa460e33d6696882f93e3db`
 
 This map records what already exists before new architecture work is created. GitHub `main` is authoritative; historical chats are useful only when consistent with the current repositories.
@@ -38,20 +38,20 @@ This map records what already exists before new architecture work is created. Gi
 | Explicit AIrLab production runner | AIrLab issue #11 | open issue | OPEN | Next Cantiere-side integration ring; must consume existing controller, not fork it | #548 + production controller |
 | Neutral Cantiere opening / explicit project restore | Cantiere 2.1 | PR #541 merged | COMPLETE | REUSE lifecycle behavior | project catalog/checkpoints |
 | Project identity collision fix | Cantiere 2.1 | PR #544 merged | COMPLETE | REUSE | persistent project state |
-| Parking resumable executions | Cantiere 2.1 | PR #545 | OPEN, CI green on head | Converge/rebase before merge; required by Durable Orchestrator semantics | current main lifecycle |
+| Parking resumable executions | Cantiere 2.1 | PR #545 merged | COMPLETE | REUSE parking/resume behavior; Durable Orchestrator V1 continues in parent PR #549 | current main lifecycle |
 | Persistent checkpoint/recovery store | Cantiere | current main code | COMPLETE foundation | REUSE as lifecycle authority | project/execution identity |
 | Researcher dispatch intake | Researcher/Cantiere | PR #535 merged | COMPLETE | REUSE | authenticated dispatch |
 | Researcher contract materialization | Researcher/Cantiere | PR #536 merged | COMPLETE | REUSE | intake |
 | Researcher → isolated project plan | Researcher/Cantiere | PR #537 merged | COMPLETE | REUSE | Workshop plan contracts |
 | Researcher authoritative workspace session | Researcher/Cantiere | PR #538 merged | COMPLETE | REUSE | WorkshopEngine |
 | Researcher validation lifecycle | Researcher/Cantiere | PR #539/#540 merged | COMPLETE | REUSE; stable Library stays isolated | Reviewer/validation |
-| Researcher machine-policy gate | Researcher/Cantiere | PR #542 | OPEN; one Windows run cancelled, other major CI green | Converge after current-main compatibility check | #535–#540 |
+| Researcher machine-policy gate | Researcher/Cantiere | PR #542 merged | COMPLETE | REUSE fail-closed machine policy gate | #535–#540 |
 | Module Library UI/status integration | Library | current main `features/module_library` | COMPLETE/ongoing | REUSE canonical Library as source of certified availability | Library data |
 | Workshop reuse descriptor persistence | Library/Cantiere | `WorkshopReuseLibraryStore` + `WorkshopReuseSourceSnapshotStore` | COMPLETE local descriptor/index persistence | REUSE; publish selected validated knowledge into Memory Fabric, never move source/artifact ownership into memory | PreferencesService + snapshot/artifact storage |
 | Researcher progress persistence/projection | Researcher/Diagnostics | `GitHubDiagnosticsResearchStatusSource` reads Diagnostics releases/events | COMPLETE read projection; no separate canonical local Researcher DB found | REUSE Diagnostics evidence as source; persist only selected validated Research Knowledge records | Diagnostics release/event schema |
 | Durable memory records/store | Memory work | current main `core/memory/assistant_durable_memory*` | COMPLETE foundation | REUSE as local backend candidate for Memory Fabric | SQLite/persistence |
 | AIrLab Memory Fabric V1 | Memory Fabric 02 | PR #20 merged; `main@eac00c43` | COMPLETE contract/core; CI + Worker smoke green; real Supabase deployment VERIFY_RUNTIME | REUSE canonical provider-neutral facade; converge parent adapters without replacing local memory | existing durable memory, Cantiere state, Supabase project |
-| Application-facing durable memory service | Memory work | PR #522 | OPEN | Converge; do not invent a second confirmed/candidate memory service | durable store |
+| Application-facing durable memory service | Memory work | PR #522 merged | COMPLETE parent service | REUSE; do not invent a second confirmed/candidate memory service | durable store |
 | Conversation/semantic memory | Assistant memory | current main `ConversationMemoryService`, semantic index | PARTIAL/shared candidate | Adapter behind Memory Fabric, keep Assistant behavior stable | embeddings/index |
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
 | Free-first cloud classification | Cloud work | current main + `docs/cloud/point-1-5-access-classification.md` | COMPLETE foundation | REUSE spend-safety semantics in Resource Pool | cost/access policy |
@@ -59,9 +59,9 @@ This map records what already exists before new architecture work is created. Gi
 | NVIDIA/Mistral free/account-dependent routes | Cloud | current cloud catalog/work | PARTIAL/VERIFY_RUNTIME | add through Resource Pool adapters, not hard-coded routing | quota/auth/health |
 | Cloud routing bootstrap/runtime provider | Cloud | current main | COMPLETE parent implementation | REUSE patterns; extract provider-neutral pieces only | provider catalog/settings |
 | Local model runtime / llama.cpp | Assistant | current main | COMPLETE parent capability, runtime validation ongoing | expose later as provider adapter; do not move runtime ownership prematurely | local runtime |
-| Runtime model-selection fix | Assistant | PR #531 | OPEN, CI failed on current head | Do not depend on this branch until repaired; architecture remains provider-neutral | runtime tests |
+| Runtime model-selection fix | Assistant | PR #531 closed unmerged; replacement work continues in PR #552 | SUPERSEDED branch / active replacement | Do not revive #531; consume only merged current-main runtime contracts | runtime tests |
 | Diagnostics local event log | Diagnostics | current main | COMPLETE | REUSE as authoritative local technical log | runtime events |
-| PostHog privacy-safe bridge | Diagnostics | PR #543 | OPEN; Android/Windows/Linux/macOS CI green | Candidate optional remote telemetry adapter; local Diagnostics remains authority | telemetry consent/config |
+| PostHog privacy-safe bridge | Diagnostics | PR #543 merged | COMPLETE optional remote telemetry bridge | REUSE; local Diagnostics remains authority and telemetry stays privacy-conscious | telemetry consent/config |
 | GitHub Actions build capacity | platform/CI tracks | multiple workflows | COMPLETE infrastructure | First build-worker backend; wrap as `build.*` capability | artifact handoff |
 | Windows/Linux/macOS/Android platform builds | platform chats | parent repo workflows | PARTIAL/ongoing per platform | consume as build workers, do not make platform branches architectural dependencies | CI health |
 | Web/PWA public product layer | Web/AIrLab | planning + Cloudflare foundation | PARTIAL | implement after P0 contract pack and web-build worker | auth/router/artifacts |
@@ -72,7 +72,7 @@ This map records what already exists before new architecture work is created. Gi
 | Generic Capability Registry | master architecture + Gateway V1 | PR #19 merged (`aa3bbb6e`) | COMPLETE V1 | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
 | Provider/resource registry convergence | Resource Pool + Gateway V1 | Resource Pool main + PR #19 merged | COMPLETE V1 contracts; real provider adapters/probes pending | `ResourceRegistry` is canonical scheduling state; Gateway `ProviderRegistry` is execution/circuit state only | Capability Registry + Memory Fabric |
 | General Model/Tool Router | master architecture + parent Cloud routing | PR #19 merged | COMPLETE V1 for intelligence capabilities | Gateway consumes canonical Resource Pool eligibility/priority; extend additively to tools/build workers | Resource Registry |
-| Durable Orchestrator boundary | master architecture | Cantiere lifecycle exists; remote job contract missing | PARTIAL | define subordinate job correlation/idempotency only | Cantiere lifecycle |
+| Durable Orchestrator boundary | master architecture + parent Cantiere | PR #545 merged; PR #549 open | PARTIAL / active V1 implementation | REUSE merged parking/resume; converge on #549 rather than creating another orchestrator | Cantiere lifecycle |
 
 ## Superseded / obsolete lines
 
@@ -102,26 +102,27 @@ The following are historical inputs, not code sources to revive directly:
 | real CAD/3D immediately | Early product ambition | DEFERRED | web/software MVP first; retain contracts only |
 | raw telemetry to remote service | Not required | REJECTED | local Diagnostics authority + privacy-safe optional telemetry |
 | automatic Researcher apply | Not accepted | REJECTED | Researcher remains isolated/candidate-only through validation gates |
+| Shared memory availability is required for provider execution | Persistence was initially synchronous on the runtime path | REJECTED | Apply canonical resource/usage state locally first; persist best-effort and reconcile failures without invalidating successful provider work |
+| Transient resource failure remains blocked until a manual probe | Early V1 health state had no canonical cooldown expiry | SUPERSEDED | RATE_LIMITED/DOWN carry shared cooldown and reopen as DEGRADED; EXHAUSTED requires fresh quota evidence |
 
 ## Immediate convergence blockers
 
-1. **P0 shared contracts are converging**: Memory Fabric is COMPLETE in PR #20; Gateway V1 capability/route contracts are merged in PR #19; Resource Pool health/quota/accounting contracts are on main. Execution correlation/idempotency remains the major shared-contract gap.
-2. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
-3. **Resource Pool now owns canonical health/quota state and Memory Fabric persistence**; authenticated provider probes and real execution adapters remain to be wired.
-4. **Generic accounting now exists as `UsageEvent` with Memory Fabric persistence**; durable production wiring is additive, not a new accounting database.
-5. **Cantiere parking PR #545 is still open** and must converge with the advanced main before Durable Orchestrator semantics are considered stable.
-6. **PostHog #543, Researcher policy #542 and memory service #522 are parallel open work**, so Shared Core extraction must not bypass their canonical contracts.
-7. **A6 issue #11 is the next AIrLab/Cantiere production integration step**, but it must remain opt-in and reuse the existing production controller.
+1. **Real provider execution remains the main Resource Pool gap**: the catalog, Gateway bridge, health/quota state, accounting, cooldown and Memory Fabric persistence exist, but authenticated provider probes/adapters are still required before remote entries can leave `UNKNOWN` safely.
+2. **AI-Orchestrator needs the shared/Dart-side adapter** so the parent app consumes the same capability/resource truth rather than growing another pool.
+3. **Provider-reported quota/reset/freshness is not yet normalized end to end**: Retry-After, remaining quota and snapshot staleness must feed the canonical Resource Pool.
+4. **AIrLab Worker still uses `NullModuleLibrary` and `NullResearcher`**: real adapters are not wired.
+5. **Cantiere parking/resume is merged in #545; Durable Orchestrator V1 core is now active in parent PR #549**, so execution correlation/idempotency must converge there rather than in Resource Pool.
+6. **PostHog #543, Researcher policy #542 and durable memory service #522 are now merged**; parent Memory Fabric convergence remains active in #550/#553 and runtime hardening in #552.
+7. **A6 production runner remains a Cantiere-side integration step** and must reuse the existing production controller.
 
 ## Migration order
 
-1. Freeze Architecture V1 and this Legacy Work Map.
-2. Create the P0 Contract Pack without changing existing runtime behavior.
-3. Adapt existing CloudProviderCatalog/free-first semantics into the generic Provider/Resource contracts.
-4. Adapt existing durable memory into Memory Fabric.
-5. Define Cantiere ↔ AIrLab execution correlation/idempotency.
-6. Connect Library/Researcher/Diagnostics real adapters.
+1. Finish Resource Pool/Gateway resilience and keep canonical state independent from Memory Fabric availability.
+2. Reuse AI-Orchestrator CloudProviderCatalog semantics to implement the first real free provider adapter.
+3. Add authenticated health/quota/reset probes plus snapshot freshness policy.
+4. Expose the same capability/resource contract to AI-Orchestrator through a shared/Dart adapter.
+5. Define/finish Cantiere ↔ AIrLab execution correlation, idempotency and parking/resume semantics.
+6. Connect real Library/Researcher/Diagnostics adapters.
 7. Complete A6 production-runner integration.
-8. Add first real free provider through Resource Pool + Router.
-9. Add `build.web` worker and complete the 0 EUR web MVP.
-10. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
+8. Add `build.web` worker and complete the 0 EUR web MVP.
+9. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
