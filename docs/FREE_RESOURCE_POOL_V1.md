@@ -269,15 +269,21 @@ usage class, quotas, fallback and evidence of capability/health probing.
 
 ## 13. Next implementation gates
 
-P0 continuation:
+Completed since the initial V1 baseline:
 
-1. add provider-state probe/adapters that update health and remaining quota;
-2. persist ResourceSnapshot/UsageEvent via Memory Fabric once that contract merges;
-3. expose the same schema to AI-Orchestrator through a Dart/shared-contract adapter;
-4. let the Intelligence Gateway consume `eligible()` rather than fixed provider names;
-5. add closed-vocabulary diagnostics for selection, fallback, rate limit and exhaustion;
-6. add the Researcher candidate-validation inbox;
-7. add a read-only resource-status API only after Router/health contracts stabilize.
+- runtime health/quota snapshots and Memory Fabric persistence;
+- virtual usage accounting persistence contract;
+- Intelligence Gateway bridge to the canonical Resource Registry;
+- Gateway routing/fallback diagnostics;
+- Researcher candidate validation gate.
+
+Remaining P0/P1 convergence:
+
+1. wire the first real provider adapter using the existing AI-Orchestrator cloud semantics;
+2. parse provider-reported remaining quota / Retry-After into `ResourceStateSnapshot`;
+3. expose the shared resource schema to AI-Orchestrator through a Dart/shared-contract adapter;
+4. define snapshot freshness/probe cadence so persisted health never becomes an eternal truth;
+5. add a resource-status inspection surface once the real-provider probe contract is stable.
 
 No real provider is automatically enabled merely by appearing in this catalog.
 
@@ -324,3 +330,39 @@ research evidence.
 
 This keeps continuous discovery useful without allowing the Researcher to silently alter
 production routing policy.
+
+
+## 15. Intelligence Gateway convergence
+
+The merged Intelligence Gateway does **not** own a competing Free Resource Pool.
+
+Canonical ownership is:
+
+```text
+airlab.resources
+  ResourceRegistry
+  ResourcePoolStateManager
+  UsageLedger
+  Memory Fabric persistence
+        |
+        v
+airlab.intelligence.ResourcePoolBridge
+        |
+        v
+ProviderRegistry / IntelligenceRouter
+  execution-local circuit breaker
+  quality / latency scoring
+  bounded provider fallback
+```
+
+The Gateway may keep fast volatile statistics that are specific to an execution process,
+but provider outcome state is projected back into the canonical Resource Pool. When a
+Memory Fabric sink is configured, health/latency/cooldown and usage accounting are persisted
+best-effort.
+
+Persistence failure is deliberately non-fatal to a successful provider call. The local
+ledger/state remains available and exposes persistence errors for diagnostics/reconciliation.
+
+Transient `RATE_LIMITED` and `DOWN` states carry a cooldown deadline and reopen as
+`DEGRADED` after that deadline so they can be retried. `EXHAUSTED` does not auto-recover:
+quota must be refreshed from real provider/account evidence.
