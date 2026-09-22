@@ -149,9 +149,7 @@ class SupabaseMemoryProvider:
                     f"version regression for {record.id}: "
                     f"{record.version} < {current.version}"
                 )
-            if record.version == current.version:
-                if record.checksum == current.checksum:
-                    return current
+            if record.version == current.version and record.checksum != current.checksum:
                 raise ValueError(
                     f"same-version checksum conflict for {record.id} v{record.version}"
                 )
