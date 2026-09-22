@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Iterable, Protocol
 
 
 @dataclass(frozen=True)
@@ -30,22 +30,43 @@ class UsageEvent:
             raise ValueError("virtual_cost must be >= 0")
 
 
-class UsageLedger:
-    """In-memory V1 accounting contract.
+class UsageEventSink(Protocol):
+    def save(self, event: UsageEvent) -> None: ...
 
-    Persistence belongs to the Memory Fabric. The Resource Pool records
-    normalized usage and virtual cost without owning a database.
+
+class UsageLedger:
+    """Fast local accounting ledger with optional best-effort persistence.
+
+    A persistence outage must not turn a successful provider call into a failed
+    task. Sink errors are retained for diagnostics/reconciliation.
     """
 
-    def __init__(self, events: Iterable[UsageEvent] = ()) -> None:
+    def __init__(
+        self,
+        events: Iterable[UsageEvent] = (),
+        *,
+        sink: UsageEventSink | None = None,
+    ) -> None:
         self._events = list(events)
+        self._sink = sink
+        self._sink_errors: list[str] = []
 
     def record(self, event: UsageEvent) -> None:
         self._events.append(event)
+        if self._sink is None:
+            return
+        try:
+            self._sink.save(event)
+        except Exception as exc:
+            self._sink_errors.append(f"{type(exc).__name__}: {exc}")
 
     @property
     def events(self) -> tuple[UsageEvent, ...]:
         return tuple(self._events)
+
+    @property
+    def sink_errors(self) -> tuple[str, ...]:
+        return tuple(self._sink_errors)
 
     @property
     def total_virtual_cost(self) -> float:
