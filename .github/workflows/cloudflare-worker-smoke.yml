@@ -118,3 +118,30 @@ jobs:
               'content': 'AIrLab mock execution: Cloudflare runtime smoke\n',
           }], result
           PY
+
+          # No real provider secret is configured in CI. The Worker must expose
+          # an empty provider set and fail closed instead of returning the
+          # deterministic control oracle as if it were real intelligence.
+          curl -fsS \
+            -H 'Authorization: Bearer test-token' \
+            http://127.0.0.1:8787/v1/intelligence/providers \
+            >/tmp/providers.json
+          python - <<'PY'
+          import json
+          with open('/tmp/providers.json', encoding='utf-8') as handle:
+              body = json.load(handle)
+          assert body == {'providers': []}, body
+          PY
+
+          code=$(curl -sS -o /tmp/chat-unavailable.json -w '%{http_code}' \
+            -H 'Authorization: Bearer test-token' \
+            -H 'Content-Type: application/json' \
+            --data '{"capability":"chat.general","messages":[{"role":"user","content":"hello"}]}' \
+            http://127.0.0.1:8787/v1/chat/completions)
+          test "$code" = "503"
+          python - <<'PY'
+          import json
+          with open('/tmp/chat-unavailable.json', encoding='utf-8') as handle:
+              body = json.load(handle)
+          assert body == {'error': 'intelligence_unavailable'}, body
+          PY
