@@ -343,6 +343,40 @@ class EnvironmentCompositionTests(unittest.TestCase):
             "Bearer nvidia-secret",
         )
 
+    def test_provider_status_reports_canonical_probe_failure(self) -> None:
+        transport = FakeTransport(
+            [
+                JsonHttpResponse(
+                    status_code=401,
+                    payload={"error": {"message": "invalid key"}},
+                    headers={},
+                )
+            ]
+        )
+        gateway = create_environment_gateway(
+            Diagnostics(),
+            secrets={"AIRLAB_NVIDIA_API_KEY": "bad-secret"},
+            transport=transport,
+        )
+
+        snapshot = gateway.providers_snapshot()[0]
+        self.assertEqual(snapshot["provider_id"], "nvidia_nim_developer")
+        self.assertEqual(snapshot["health"]["state"], "healthy")
+        self.assertEqual(snapshot["resource_state"]["health"], "DOWN")
+        self.assertEqual(
+            snapshot["resource_state"]["availability"],
+            "authentication_required",
+        )
+
+        with self.assertRaises(GatewayUnavailable):
+            gateway.complete(
+                GatewayRequest(
+                    capability="chat.general",
+                    messages=(GatewayMessage(role="user", content="hello"),),
+                )
+            )
+        self.assertEqual(len(transport.calls), 1)
+
     def test_nvidia_development_binding_cannot_serve_commercial_request(self) -> None:
         transport = FakeTransport(
             [
