@@ -116,6 +116,16 @@ class OpenAICompatibleProviderTests(unittest.TestCase):
         )
         self.assertNotIn("provider-a", repr(call["payload"]))
 
+    def test_reserved_headers_cannot_override_provider_auth(self) -> None:
+        with self.assertRaisesRegex(ValueError, "cannot override"):
+            OpenAICompatibleProvider(
+                provider_id="provider-a",
+                endpoint="https://provider.example/v1/chat/completions",
+                api_key_provider=lambda: "secret",
+                transport=FakeTransport([]),
+                extra_headers={"Authorization": "Bearer attacker-value"},
+            )
+
     def test_missing_credential_fails_before_network(self) -> None:
         transport = FakeTransport([])
         provider = OpenAICompatibleProvider(
