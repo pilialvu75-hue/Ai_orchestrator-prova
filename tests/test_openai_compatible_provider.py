@@ -25,6 +25,36 @@ class Diagnostics:
         self.events.append((event, fields))
 
 
+class EndpointTransport:
+    def __init__(self, responses_by_url: dict[str, list[JsonHttpResponse]]) -> None:
+        self.responses_by_url = {
+            url: list(responses)
+            for url, responses in responses_by_url.items()
+        }
+        self.calls: list[dict[str, object]] = []
+
+    def post_json(
+        self,
+        url: str,
+        *,
+        headers,
+        payload,
+        timeout_seconds: float,
+    ) -> JsonHttpResponse:
+        self.calls.append(
+            {
+                "url": url,
+                "headers": dict(headers),
+                "payload": dict(payload),
+                "timeout_seconds": timeout_seconds,
+            }
+        )
+        queue = self.responses_by_url.get(url)
+        if not queue:
+            raise AssertionError(f"unexpected transport call: {url}")
+        return queue.pop(0)
+
+
 class FakeTransport:
     def __init__(self, responses: list[JsonHttpResponse]) -> None:
         self.responses = list(responses)
@@ -342,6 +372,113 @@ class EnvironmentCompositionTests(unittest.TestCase):
             transport.calls[1]["headers"]["authorization"],
             "Bearer nvidia-secret",
         )
+
+    def test_architecture_falls_back_from_nvidia_to_openrouter_free(self) -> None:
+        nvidia_url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
+        transport = EndpointTransport(
+            {
+                openrouter_url: [
+                    JsonHttpResponse(
+                        status_code=200,
+                        payload={"choices": [{"message": {"content": ""}}]},
+                        headers={},
+                    ),
+                    ok_response(
+                        "openrouter fallback answer",
+                        model="free-routed-model",
+                    ),
+                ],
+                nvidia_url: [
+                    JsonHttpResponse(
+                        status_code=200,
+                        payload={"choices": [{"message": {"content": ""}}]},
+                        headers={},
+                    ),
+                    JsonHttpResponse(
+                        status_code=503,
+                        payload={"error": {"message": "temporarily unavailable"}},
+                        headers={"retry-after": "5"},
+                    ),
+                ],
+            }
+        )
+        diagnostics = Diagnostics()
+        gateway = create_environment_gateway(
+            diagnostics,
+            secrets={
+                "AIRLAB_OPENROUTER_API_KEY": "openrouter-secret",
+                "AIRLAB_NVIDIA_API_KEY": "nvidia-secret",
+            },
+            transport=transport,
+        )
+
+        response = gateway.complete(
+            GatewayRequest(
+                capability="architecture",
+                messages=(GatewayMessage(role="user", content="design this"),),
+            )
+        )
+
+        self.assertEqual(response.text, "openrouter fallback answer")
+        self.assertEqual(response.provider_id, "openrouter_free_pool")
+        self.assertEqual(
+            [attempt.provider_id for attempt in response.attempts],
+            ["nvidia_nim_developer", "openrouter_free_pool"],
+        )
+        self.assertEqual(response.attempts[0].failure_kind, "provider_unavailable")
+        fallback = next(
+            fields
+            for event, fields in diagnostics.events
+            if event == "intelligence_fallback"
+        )
+        self.assertEqual(
+            fallback["from_provider_id"],
+            "nvidia_nim_developer",
+        )
+        self.assertEqual(
+            fallback["to_provider_id"],
+            "openrouter_free_pool",
+        )
+        execution_urls = [
+            call["url"]
+            for call in transport.calls
+            if call["payload"].get("messages", [{}])[0].get("content") != "ping"
+        ]
+        self.assertEqual(execution_urls, [nvidia_url, openrouter_url])
+
+    def test_openrouter_free_binding_is_not_commercial_by_default(self) -> None:
+        openrouter_url = "https://openrouter.ai/api/v1/chat/completions"
+        transport = EndpointTransport(
+            {
+                openrouter_url: [
+                    JsonHttpResponse(
+                        status_code=200,
+                        payload={"choices": [{"message": {"content": ""}}]},
+                        headers={},
+                    ),
+                ],
+            }
+        )
+        gateway = create_environment_gateway(
+            Diagnostics(),
+            secrets={"AIRLAB_OPENROUTER_API_KEY": "openrouter-secret"},
+            transport=transport,
+        )
+
+        with self.assertRaises(GatewayUnavailable):
+            gateway.complete(
+                GatewayRequest(
+                    capability="chat.general",
+                    messages=(GatewayMessage(role="user", content="commercial"),),
+                    policy=RoutePolicy(
+                        environment="commercial",
+                        free_only=True,
+                        paid_allowed=False,
+                    ),
+                )
+            )
+        self.assertEqual(len(transport.calls), 1)
 
     def test_provider_status_reports_canonical_probe_failure(self) -> None:
         transport = FakeTransport(
