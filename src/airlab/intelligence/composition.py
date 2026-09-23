@@ -9,6 +9,7 @@ from airlab.resources import (
     free_resource_pool_v1,
 )
 
+from .contracts import AccessClass
 from .gateway import DiagnosticsSink, IntelligenceGateway
 from .openai_compatible import (
     JsonHttpTransport,
@@ -31,8 +32,34 @@ class OpenAIProviderTemplate:
     model: str
     gateway_capabilities: frozenset[str]
     context_window: int
-    access_class: str
-    quality_score: float = 0.8
+    access_class: AccessClass
+    quality_score: float = 0.5
+
+
+_OPENROUTER_FREE = OpenAIProviderTemplate(
+    resource_id="openrouter_free_pool",
+    secret_name="AIRLAB_OPENROUTER_API_KEY",
+    endpoint="https://openrouter.ai/api/v1/chat/completions",
+    model="openrouter/free",
+    gateway_capabilities=frozenset(
+        {
+            "chat.general",
+            "reasoning.fast",
+            "reasoning.deep",
+            "coding.generate",
+            "coding.review",
+            "coding.debug",
+            "architecture",
+            "summarize",
+            "classify",
+            "long_context",
+            "research",
+        }
+    ),
+    context_window=200_000,
+    access_class="recurring_free",
+    quality_score=0.5,
+)
 
 
 _NVIDIA_NIM = OpenAIProviderTemplate(
@@ -57,10 +84,10 @@ _NVIDIA_NIM = OpenAIProviderTemplate(
     ),
     context_window=1_000_000,
     access_class="development_free",
-    quality_score=0.95,
+    quality_score=0.5,
 )
 
-OPENAI_COMPATIBLE_TEMPLATES = (_NVIDIA_NIM,)
+OPENAI_COMPATIBLE_TEMPLATES = (_OPENROUTER_FREE, _NVIDIA_NIM)
 
 
 def create_environment_gateway(
@@ -100,7 +127,7 @@ def create_environment_gateway(
             gateway_capabilities=template.gateway_capabilities,
             context_window=template.context_window,
             quality_score=template.quality_score,
-            access_class=template.access_class,  # type: ignore[arg-type]
+            access_class=template.access_class,
             adapter_id="openai_compatible",
         )
         descriptor = provider_descriptor_from_resource(resource, binding)
