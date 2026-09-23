@@ -55,8 +55,8 @@ This map records what already exists before new architecture work is created. Gi
 | Conversation/semantic memory | Assistant memory | current main `ConversationMemoryService`, semantic index | PARTIAL/shared candidate | Adapter behind Memory Fabric, keep Assistant behavior stable | embeddings/index |
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
 | Free-first cloud classification | Cloud work | current main + `docs/cloud/point-1-5-access-classification.md` | COMPLETE foundation | REUSE spend-safety semantics in Resource Pool | cost/access policy |
-| OpenRouter free pool integration | Cloud | current main provider catalog/tests | COMPLETE in parent project | REUSE provider adapter/state when AIrLab Router is ready | provider registry |
-| NVIDIA/Mistral free/account-dependent routes | Cloud + Gateway adapter ring | generic OpenAI-compatible adapter; NVIDIA binding on this branch | NVIDIA adapter COMPLETE code / VERIFY_RUNTIME credential+endpoint; Mistral still pending binding | keep all policy in Resource Pool; add providers through bindings, not public routing names | quota/auth/health |
+| OpenRouter free pool integration | parent Cloud + AIrLab Gateway | parent catalog plus AIrLab generic OpenAI-compatible binding | COMPLETE code / VERIFY_RUNTIME secret+endpoint | REUSE `openrouter/free` as the second free-safe remote binding; keep policy in Resource Pool | Resource Registry + auth/health |
+| NVIDIA/Mistral free/account-dependent routes | Cloud + Gateway adapter rings | generic OpenAI-compatible adapter; NVIDIA binding active in code; Mistral catalog only | NVIDIA COMPLETE code / VERIFY_RUNTIME; Mistral deliberately not auto-bound | do not infer spend-safe access from an account-dependent API key | quota/auth/health |
 | Cloud routing bootstrap/runtime provider | Cloud | current main | COMPLETE parent implementation | REUSE patterns; extract provider-neutral pieces only | provider catalog/settings |
 | Local model runtime / llama.cpp | Assistant | current main | COMPLETE parent capability, runtime validation ongoing | expose later as provider adapter; do not move runtime ownership prematurely | local runtime |
 | Runtime model-selection fix | Assistant | PR #531 closed unmerged; replacement work continues in PR #552 | SUPERSEDED branch / active replacement | Do not revive #531; consume only merged current-main runtime contracts | runtime tests |
@@ -126,3 +126,8 @@ The following are historical inputs, not code sources to revive directly:
 7. Complete A6 production-runner integration.
 8. Add `build.web` worker and complete the 0 EUR web MVP.
 9. Only after the web path is repeatable, widen to simple apps and later CAD/3D.
+
+
+### 2026-09-23 — free-safe fallback decision
+
+OpenRouter `openrouter/free` is added as the second real binding because its model slug is explicitly zero-price. Groq/Mistral remain catalogued but not automatically composed until an authenticated account/free-entitlement signal can prove the next request is spend-safe. This confirms the earlier free-first rule rather than weakening it.
