@@ -106,7 +106,16 @@ class OpenAICompatibleProvider:
         self._endpoint = normalized_endpoint
         self._api_key_provider = api_key_provider
         self._transport = transport or HttpxJsonTransport()
-        self._extra_headers = dict(extra_headers or {})
+        normalized_headers = {
+            str(key).strip().lower(): str(value)
+            for key, value in (extra_headers or {}).items()
+        }
+        reserved = {"authorization", "content-type"}.intersection(normalized_headers)
+        if reserved:
+            raise ValueError(
+                "extra_headers cannot override authorization or content-type"
+            )
+        self._extra_headers = normalized_headers
         self._timeout_seconds = float(timeout_seconds)
 
     @property
@@ -125,9 +134,9 @@ class OpenAICompatibleProvider:
         response = self._transport.post_json(
             self._endpoint,
             headers={
+                **self._extra_headers,
                 "authorization": f"Bearer {credential}",
                 "content-type": "application/json",
-                **self._extra_headers,
             },
             payload={
                 "model": model,
@@ -160,9 +169,9 @@ class OpenAICompatibleProvider:
         response = self._transport.post_json(
             self._endpoint,
             headers={
+                **self._extra_headers,
                 "authorization": f"Bearer {credential}",
                 "content-type": "application/json",
-                **self._extra_headers,
             },
             payload={
                 "model": model,
