@@ -406,8 +406,8 @@ Multi-tenant billing and SLA are deferred until after the 0 EUR MVP works end to
 | Cloudflare Worker | Transport/runtime host | Active staging foundation | Adapter only |
 | GitHub Actions | CI/build resource | Existing | First build-worker backend |
 | AI-Orchestrator local runtime | Local inference | Existing in parent project | Shared adapter candidate |
-| NVIDIA cloud models | First real OpenAI-compatible binding | Code wired opt-in; runtime secret/probe evidence pending | Development/prototyping only; Resource Pool remains policy authority |
-| OpenRouter | Planned multi-model source | Resource entry exists; generic transport now reusable | Add binding only after policy/runtime verification |
+| NVIDIA cloud models | OpenAI-compatible remote binding | Code wired opt-in; runtime secret/probe evidence pending | Development/prototyping only; Resource Pool remains policy authority |
+| OpenRouter | Free Models Router remote binding | Generic adapter binding implemented; runtime secret/probe evidence pending | Free-only candidate; Resource Pool usage classes and health remain authoritative |
 | Cloudflare AI | Planned provider | Not wired | 04 + 01 |
 | OpenAI / Claude paid APIs | Future premium resources | Deferred | Enable only after spend policy |
 | NAS/home inference | Future local resource | Deferred | Add, never replace cloud/local |
