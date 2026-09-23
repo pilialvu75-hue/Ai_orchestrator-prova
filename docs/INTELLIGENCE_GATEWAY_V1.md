@@ -1,6 +1,6 @@
 # Intelligence Gateway V1
 
-Status: **merged V1 + first real provider adapter integration**
+Status: **merged V1 + free-safe multi-provider fallback integration**
 
 Baseline:
 - AIrLab Architecture V1 main after PR #12: `f3d52d2c91c437e437e12872030495dd719d2ed6`
@@ -177,3 +177,19 @@ Safety properties:
 - NVIDIA remains development/prototyping-only according to the canonical Resource Pool policy, so commercial routing fails closed.
 
 The adapter is deliberately reusable for future OpenRouter, Groq and Mistral bindings without changing the public capability API.
+
+
+## Free-safe multi-provider fallback ring
+
+The generic OpenAI-compatible adapter now has two opt-in bindings that are safe to schedule under the V1 free-only policy when configured and healthy:
+
+- `nvidia_nim_developer` — development/prototyping entitlement, 1M declared binding context, never commercial by default;
+- `openrouter_free_pool` — model slug `openrouter/free`, zero-token-price route, 200K declared binding context, still restricted to the Resource Pool's allowed usage classes.
+
+Both remain absent when their encrypted secrets are missing. Both are authenticated-probed before they become schedulable.
+
+For `architecture`, the canonical Resource Pool priority makes NVIDIA the first candidate when both are healthy. A retryable NVIDIA failure is proven by tests to fall through to OpenRouter while preserving the same public `/v1/chat/completions` request.
+
+Static `quality_score` is intentionally neutral (0.5) for these bindings until measured runtime evidence exists. Capability-specific Resource Pool priority, observed health and observed latency are allowed to affect the route; unmeasured model quality is not guessed.
+
+Groq and Mistral are deliberately not activated by this ring. Their catalog entries remain useful, but account-dependent free access must not be treated as a spend-safe next request merely because an API key exists.
