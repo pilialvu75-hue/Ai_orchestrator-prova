@@ -56,7 +56,7 @@ This map records what already exists before new architecture work is created. Gi
 | Cloud provider catalog | Cloud work | current main `cloud_provider_catalog.dart` | COMPLETE domain-specific catalog | MIGRATE concepts into generic Provider Registry; do not discard existing cloud catalog | routing/settings |
 | Free-first cloud classification | Cloud work | current main + `docs/cloud/point-1-5-access-classification.md` | COMPLETE foundation | REUSE spend-safety semantics in Resource Pool | cost/access policy |
 | OpenRouter free pool integration | Cloud | current main provider catalog/tests | COMPLETE in parent project | REUSE provider adapter/state when AIrLab Router is ready | provider registry |
-| NVIDIA/Mistral free/account-dependent routes | Cloud | current cloud catalog/work | PARTIAL/VERIFY_RUNTIME | add through Resource Pool adapters, not hard-coded routing | quota/auth/health |
+| NVIDIA/Mistral free/account-dependent routes | Cloud + Gateway adapter ring | generic OpenAI-compatible adapter; NVIDIA binding on this branch | NVIDIA adapter COMPLETE code / VERIFY_RUNTIME credential+endpoint; Mistral still pending binding | keep all policy in Resource Pool; add providers through bindings, not public routing names | quota/auth/health |
 | Cloud routing bootstrap/runtime provider | Cloud | current main | COMPLETE parent implementation | REUSE patterns; extract provider-neutral pieces only | provider catalog/settings |
 | Local model runtime / llama.cpp | Assistant | current main | COMPLETE parent capability, runtime validation ongoing | expose later as provider adapter; do not move runtime ownership prematurely | local runtime |
 | Runtime model-selection fix | Assistant | PR #531 closed unmerged; replacement work continues in PR #552 | SUPERSEDED branch / active replacement | Do not revive #531; consume only merged current-main runtime contracts | runtime tests |
@@ -70,7 +70,7 @@ This map records what already exists before new architecture work is created. Gi
 | NAS/home node | architecture direction | no current production adapter | DEFERRED | future provider/storage/build backend; never replace local/cloud | network/health |
 | Cost/accounting core | Free Resource Pool V1 | `UsageEvent`, `UsageLedger`, `MemoryUsageEventStore` on main | COMPLETE V1 contract / durable adapter | REUSE; monetary FinOps mapping remains future work | Resource Pool + Memory Fabric |
 | Generic Capability Registry | master architecture + Gateway V1 | PR #19 merged (`aa3bbb6e`) | COMPLETE V1 | Reuse exact V1 intelligence vocabulary; extend platform capabilities separately | task taxonomy |
-| Provider/resource registry convergence | Resource Pool + Gateway V1 | Resource Pool main + PR #19 merged | COMPLETE V1 contracts; real provider adapters/probes pending | `ResourceRegistry` is canonical scheduling state; Gateway `ProviderRegistry` is execution/circuit state only | Capability Registry + Memory Fabric |
+| Provider/resource registry convergence | Resource Pool + Gateway V1 | Resource Pool main + PR #19; first real adapter ring | COMPLETE V1 contracts + generic OpenAI-compatible execution adapter; provider runtime evidence still required | `ResourceRegistry` remains canonical scheduling state; Gateway registry is execution/circuit state only | Capability Registry + Memory Fabric |
 | General Model/Tool Router | master architecture + parent Cloud routing | PR #19 merged | COMPLETE V1 for intelligence capabilities | Gateway consumes canonical Resource Pool eligibility/priority; extend additively to tools/build workers | Resource Registry |
 | Durable Orchestrator boundary | master architecture + parent Cantiere | PR #545 merged; PR #549 open | PARTIAL / active V1 implementation | REUSE merged parking/resume; converge on #549 rather than creating another orchestrator | Cantiere lifecycle |
 
@@ -118,7 +118,7 @@ The following are historical inputs, not code sources to revive directly:
 ## Migration order
 
 1. Finish Resource Pool/Gateway resilience and keep canonical state independent from Memory Fabric availability.
-2. Reuse AI-Orchestrator CloudProviderCatalog semantics to implement the first real free provider adapter.
+2. First real free-provider adapter implemented as a generic OpenAI-compatible transport with an opt-in NVIDIA NIM binding; next step is runtime verification with a configured secret, then add further bindings without duplicating transport.
 3. Add authenticated health/quota/reset probes plus snapshot freshness policy.
 4. Expose the same capability/resource contract to AI-Orchestrator through a shared/Dart adapter.
 5. Define/finish Cantiere ↔ AIrLab execution correlation, idempotency and parking/resume semantics.

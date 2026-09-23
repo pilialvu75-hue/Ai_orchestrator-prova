@@ -84,7 +84,15 @@ class IntelligenceGateway:
         return [item.to_json() for item in self._capabilities.all()]
 
     def providers_snapshot(self) -> list[dict[str, object]]:
-        return self._providers.public_snapshot()
+        snapshots = self._providers.public_snapshot()
+        if self._resource_pool is None:
+            return snapshots
+        for snapshot in snapshots:
+            provider_id = str(snapshot.get("provider_id", ""))
+            resource_state = self._resource_pool.public_state(provider_id)
+            if resource_state is not None:
+                snapshot["resource_state"] = resource_state
+        return snapshots
 
     def complete(self, request: GatewayRequest) -> GatewayResponse:
         request_id = str(uuid4())

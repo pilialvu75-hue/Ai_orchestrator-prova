@@ -15,3 +15,7 @@ enabled = true
 
 # No secret values, provider keys, account IDs, or reusable browser credentials
 # belong in this file. Configure AIRLAB_AUTH_TOKEN as an encrypted Worker Secret.
+
+# Optional real-intelligence credentials are configured as encrypted Worker
+# secrets, not [vars]. V1 currently recognizes AIRLAB_NVIDIA_API_KEY. Its
+# absence is valid and leaves remote intelligence unavailable/fail-closed.

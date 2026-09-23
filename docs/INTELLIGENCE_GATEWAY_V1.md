@@ -1,6 +1,6 @@
 # Intelligence Gateway V1
 
-Status: **merged V1 + Resource Pool convergence hardening**
+Status: **merged V1 + first real provider adapter integration**
 
 Baseline:
 - AIrLab Architecture V1 main after PR #12: `f3d52d2c91c437e437e12872030495dd719d2ed6`
@@ -157,7 +157,23 @@ Not introduced:
 ## Next migration ring
 
 1. add authenticated provider probes/adapters that update canonical `ResourceStateSnapshot` values;
-2. wire the first real free provider through a `ProviderBinding` without changing the public API;
+2. **implemented in this ring:** generic OpenAI-compatible adapter + opt-in NVIDIA NIM `ProviderBinding`; Worker reads only the encrypted `AIRLAB_NVIDIA_API_KEY` secret and probes before scheduling;
 3. ingest provider-reported quota and `Retry-After` into Resource Pool state rather than inventing Gateway-only quota fields;
 4. expose the Gateway to AI-Orchestrator ONLINE mode while preserving Local llama.cpp OFFLINE mode;
 5. add consensus/multi-model execution only for capabilities that require it.
+
+
+## First real provider adapter ring
+
+AIrLab now has one transport implementation for OpenAI-compatible Chat Completions APIs rather than provider-specific HTTP stacks. The first binding reuses the existing Resource Pool entry `nvidia_nim_developer` and parent endpoint/model semantics. It is activated only when `AIRLAB_NVIDIA_API_KEY` exists.
+
+Safety properties:
+
+- no provider secret in request payloads, logs, source or `wrangler.toml`;
+- HTTPS-only endpoint validation and redirects disabled by the HTTP transport;
+- configured resources remain unschedulable until an authenticated probe succeeds;
+- auth/rate/quota/network/5xx/invalid-request failures are normalized into Gateway failure kinds;
+- the Cloudflare Worker no longer exposes the deterministic control provider as real intelligence; with no provider secret, `/v1/chat/completions` returns an explicit unavailable response;
+- NVIDIA remains development/prototyping-only according to the canonical Resource Pool policy, so commercial routing fails closed.
+
+The adapter is deliberately reusable for future OpenRouter, Groq and Mistral bindings without changing the public capability API.
