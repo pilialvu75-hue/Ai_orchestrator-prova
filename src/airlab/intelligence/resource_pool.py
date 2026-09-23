@@ -134,6 +134,29 @@ class ResourcePoolBridge:
 
         return tuple(failures)
 
+    def public_state(self, provider_id: str) -> dict[str, object] | None:
+        resource = self.registry.get(provider_id)
+        if resource is None:
+            return None
+        return {
+            "resource_id": resource.resource_id,
+            "health": resource.health.value,
+            "availability": resource.availability,
+            "last_checked": resource.last_checked,
+            "latency": resource.latency,
+            "cooldown_until": resource.cooldown_until,
+            "quota": [
+                {
+                    "name": metric.name,
+                    "remaining": metric.remaining,
+                    "limit": metric.limit,
+                    "unit": metric.unit,
+                    "reset_period": metric.reset_period,
+                }
+                for metric in resource.quota
+            ],
+        }
+
     def priority_for(self, provider_id: str, gateway_capability: str) -> int | None:
         resource = self.registry.get(provider_id)
         resource_capability = CAPABILITY_TO_RESOURCE_CAPABILITY.get(gateway_capability)
