@@ -23,7 +23,10 @@ _SERVICE = BuilderService(
     researcher=NullResearcher(),
     diagnostics=_DIAGNOSTICS,
 )
-_PROVIDER_SECRET_NAMES = ("AIRLAB_NVIDIA_API_KEY",)
+_PROVIDER_SECRET_NAMES = (
+    "AIRLAB_OPENROUTER_API_KEY",
+    "AIRLAB_NVIDIA_API_KEY",
+)
 
 
 class Default(WorkerEntrypoint):
