@@ -3,6 +3,10 @@ name = "airlab"
 version = "0.1.0"
 description = "Hardware-independent builder runtime for AI-Orchestrator Cantiere"
 requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28.0",
+    "workers-runtime-sdk>=1.1.1; python_version >= '3.12'",
+]
 
 [dependency-groups]
 dev = [
