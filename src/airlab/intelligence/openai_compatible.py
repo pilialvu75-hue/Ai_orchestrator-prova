@@ -113,6 +113,41 @@ class OpenAICompatibleProvider:
     def provider_id(self) -> str:
         return self._provider_id
 
+    def probe(self, *, model: str) -> None:
+        credential = self._api_key_provider().strip()
+        if not credential:
+            raise ProviderExecutionError(
+                "provider credential is not configured",
+                kind="authentication",
+                retryable=True,
+            )
+
+        response = self._transport.post_json(
+            self._endpoint,
+            headers={
+                "authorization": f"Bearer {credential}",
+                "content-type": "application/json",
+                **self._extra_headers,
+            },
+            payload={
+                "model": model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 1,
+                "temperature": 0.0,
+                "stream": False,
+            },
+            timeout_seconds=self._timeout_seconds,
+        )
+        if response.status_code < 200 or response.status_code >= 300:
+            raise _provider_error_for(response)
+        choices = response.payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise ProviderExecutionError(
+                "provider probe returned no choices",
+                kind="provider_error",
+                retryable=True,
+            )
+
     def complete(self, request: GatewayRequest, *, model: str) -> ProviderOutput:
         credential = self._api_key_provider().strip()
         if not credential:
@@ -185,24 +220,9 @@ class OpenAICompatibleProbe:
         return self._resource_id
 
     def probe(self) -> ResourceStateSnapshot:
-        from .contracts import GatewayMessage, GatewayRequest
-
         started = monotonic()
         try:
-            self._provider.complete(
-                GatewayRequest(
-                    capability="chat.general",
-                    messages=(
-                        GatewayMessage(
-                            role="user",
-                            content="Reply with OK.",
-                        ),
-                    ),
-                    max_tokens=2,
-                    temperature=0.0,
-                ),
-                model=self._model,
-            )
+            self._provider.probe(model=self._model)
         except ProviderExecutionError as exc:
             latency_ms = (monotonic() - started) * 1000.0
             return ResourceStateSnapshot(
