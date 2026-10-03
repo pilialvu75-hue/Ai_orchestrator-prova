@@ -1,0 +1,304 @@
+name: AIrLab Private Cloudflare Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type DEPLOY_PRIVATE_AIRLAB to confirm the private Access gate'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: airlab-private-cloudflare-staging
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  AIRLAB_WORKER_NAME: airlab-private-mock
+
+jobs:
+  deploy-private:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: airlab-private-staging
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AIRLAB_AUTH_TOKEN: ${{ secrets.AIRLAB_AUTH_TOKEN }}
+      CLOUDFLARE_ACCESS_EMAIL: ${{ secrets.CLOUDFLARE_ACCESS_EMAIL }}
+
+    steps:
+      - name: Require explicit private-deploy confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != "DEPLOY_PRIVATE_AIRLAB" ]]; then
+            echo "AIrLab private deployment was not explicitly confirmed."
+            exit 1
+          fi
+
+      - name: Validate private deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_ACCOUNT_ID}"
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${AIRLAB_AUTH_TOKEN}"
+          test -n "${CLOUDFLARE_ACCESS_EMAIL}"
+          if [[ "${#AIRLAB_AUTH_TOKEN}" -lt 24 ]]; then
+            echo "AIRLAB_AUTH_TOKEN is too short for private staging."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv
+
+      - name: Compile and run AIrLab tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=src python -m compileall -q src tests
+          PYTHONPATH=src python -m unittest discover -s tests -v
+
+      - name: Prepare hostname-level Cloudflare Access before deploy
+        id: access
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          account_id = os.environ['CLOUDFLARE_ACCOUNT_ID'].strip()
+          api_token = os.environ['CLOUDFLARE_API_TOKEN'].strip()
+          access_email = os.environ['CLOUDFLARE_ACCESS_EMAIL'].strip()
+          worker_name = os.environ['AIRLAB_WORKER_NAME'].strip()
+          output_path = os.environ['GITHUB_OUTPUT']
+
+          if '@' not in access_email:
+              raise SystemExit('CLOUDFLARE_ACCESS_EMAIL is not a valid email address.')
+
+          base = 'https://api.cloudflare.com/client/v4'
+
+          def call(method, path, payload=None):
+              body = None
+              headers = {
+                  'Authorization': f'Bearer {api_token}',
+                  'Accept': 'application/json',
+              }
+              if payload is not None:
+                  body = json.dumps(payload).encode('utf-8')
+                  headers['Content-Type'] = 'application/json'
+              request = urllib.request.Request(
+                  base + path,
+                  data=body,
+                  headers=headers,
+                  method=method,
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      result = json.load(response)
+              except Exception as exc:
+                  raise SystemExit(f'Cloudflare API request failed for {path}: {exc}') from exc
+              if not result.get('success'):
+                  raise SystemExit(
+                      f'Cloudflare API rejected {path}: {result.get("errors")}'
+                  )
+              return result.get('result')
+
+          subdomain_result = call(
+              'GET',
+              f'/accounts/{account_id}/workers/subdomain',
+          )
+          subdomain = str((subdomain_result or {}).get('subdomain') or '').strip()
+          if not subdomain:
+              raise SystemExit('Cloudflare Workers subdomain is not configured.')
+
+          hostname = f'{worker_name}.{subdomain}.workers.dev'
+          encoded = urllib.parse.urlencode({'per_page': 200})
+          applications = call(
+              'GET',
+              f'/accounts/{account_id}/access/apps?{encoded}',
+          ) or []
+
+          matches = []
+          for app in applications:
+              domain = str(app.get('domain') or '').strip()
+              destinations = app.get('destinations') or []
+              destination_match = any(
+                  isinstance(item, dict)
+                  and str(item.get('uri') or '').strip() == hostname
+                  for item in destinations
+              )
+              if domain == hostname or destination_match:
+                  matches.append(app)
+
+          if len(matches) > 1:
+              raise SystemExit(
+                  f'Multiple Cloudflare Access applications protect {hostname}; refusing to guess.'
+              )
+
+          if not matches:
+              payload = {
+                  'name': 'AIrLab private staging',
+                  'type': 'self_hosted',
+                  'domain': hostname,
+                  'destinations': [
+                      {
+                          'type': 'public',
+                          'uri': hostname,
+                      }
+                  ],
+                  'session_duration': '24h',
+                  'app_launcher_visible': False,
+                  'policies': [
+                      {
+                          'name': 'AIrLab owner only',
+                          'decision': 'allow',
+                          'precedence': 1,
+                          'include': [
+                              {
+                                  'email': {
+                                      'email': access_email,
+                                  }
+                              }
+                          ],
+                          'exclude': [],
+                          'require': [],
+                      }
+                  ],
+              }
+              app = call(
+                  'POST',
+                  f'/accounts/{account_id}/access/apps',
+                  payload,
+              )
+              app_id = str((app or {}).get('id') or '').strip()
+              if not app_id:
+                  raise SystemExit('Cloudflare Access application was created without an id.')
+          else:
+              app = matches[0]
+              app_id = str(app.get('id') or '').strip()
+              if not app_id:
+                  raise SystemExit('Existing Cloudflare Access application has no id.')
+
+              policies = call(
+                  'GET',
+                  f'/accounts/{account_id}/access/apps/{app_id}/policies?per_page=100',
+              ) or []
+              allowed_email = False
+              for policy in policies:
+                  decision = str(policy.get('decision') or '').strip()
+                  include = policy.get('include') or []
+                  if decision == 'bypass':
+                      raise SystemExit(
+                          'Existing AIrLab Access application contains a bypass policy; refusing deploy.'
+                      )
+                  for rule in include:
+                      if not isinstance(rule, dict):
+                          continue
+                      if 'everyone' in rule:
+                          raise SystemExit(
+                              'Existing AIrLab Access application allows everyone; refusing deploy.'
+                          )
+                      email_rule = rule.get('email')
+                      if (
+                          decision == 'allow'
+                          and isinstance(email_rule, dict)
+                          and str(email_rule.get('email') or '').strip().lower()
+                          == access_email.lower()
+                      ):
+                          allowed_email = True
+              if not allowed_email:
+                  raise SystemExit(
+                      'Existing AIrLab Access application does not contain the expected owner-only allow rule.'
+                  )
+
+          with open(output_path, 'a', encoding='utf-8') as handle:
+              handle.write(f'hostname={hostname}\n')
+              handle.write(f'access_app_id={app_id}\n')
+          print(f'Cloudflare Access is prepared for {hostname}.')
+          PY
+
+      - name: Deploy Python Worker with encrypted secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRETS_FILE="$(mktemp)"
+          cleanup() {
+            rm -f "${SECRETS_FILE}"
+          }
+          trap cleanup EXIT
+          chmod 600 "${SECRETS_FILE}"
+          python - <<'PY' "${SECRETS_FILE}"
+          import json
+          import os
+          import sys
+
+          path = sys.argv[1]
+          with open(path, 'w', encoding='utf-8') as handle:
+              json.dump(
+                  {'AIRLAB_AUTH_TOKEN': os.environ['AIRLAB_AUTH_TOKEN']},
+                  handle,
+              )
+          PY
+
+          uvx --from workers-py pywrangler deploy --secrets-file "${SECRETS_FILE}"
+
+      - name: Prove deployed Worker remains behind Cloudflare Access
+        shell: bash
+        env:
+          WORKER_HOSTNAME: ${{ steps.access.outputs.hostname }}
+        run: |
+          set -euo pipefail
+          test -n "${WORKER_HOSTNAME}"
+
+          headers="$(mktemp)"
+          body="$(mktemp)"
+          cleanup() {
+            rm -f "${headers}" "${body}"
+          }
+          trap cleanup EXIT
+
+          status="$(curl -sS --connect-timeout 10 --max-time 20 \
+            --max-redirs 0 -D "${headers}" -o "${body}" \
+            -w '%{http_code}' "https://${WORKER_HOSTNAME}/health" || true)"
+
+          location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub(/\r/, ""); print; exit}' "${headers}")"
+
+          if [[ "${status}" =~ ^30[12378]$ ]]; then
+            if [[ "${location}" != *"cloudflareaccess.com"* && \
+                  "${location}" != *"/cdn-cgi/access/"* ]]; then
+              echo "Worker redirected, but not to a Cloudflare Access boundary."
+              exit 1
+            fi
+          elif [[ "${status}" != "401" && "${status}" != "403" ]]; then
+            echo "AIrLab Worker is not fail-closed behind Access (HTTP ${status})."
+            exit 1
+          fi
+
+          if grep -Fq "AIRLAB_AUTH_TOKEN" "${body}"; then
+            echo "Secret name leaked in the public response body."
+            exit 1
+          fi
+
+          echo "AIrLab private Worker deployment is protected by Cloudflare Access."
