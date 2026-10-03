@@ -111,7 +111,7 @@ Expected key:
 airlab:v1:1637d6cf216f94593ac4e97bbb1bce0841553d46922a2ec754df8a8fe7eca701
 ```
 
-The Dart mirror must pass this exact vector before the contract is used across HTTP/provider boundaries.
+The Python reference and Dart mirror must both pass this exact vector before the contract is carried into a durable remote-execution path.
 
 ## Remote execution evidence vocabulary
 
@@ -155,14 +155,30 @@ They must not contain by default:
 - API keys/secrets;
 - arbitrary user data.
 
+## HTTP integration status
+
+`POST /v1/tasks` may carry an optional top-level `execution_correlation` object using the V1 schema above.
+
+Rules:
+
+- omitting `execution_correlation` preserves the historical request contract;
+- when present, the supplied idempotency key is re-derived and validated;
+- `execution_correlation.project_id` must match the task request `project_id`;
+- invalid or mismatched correlation fails closed with a bad-request response;
+- the transport does not mint correlation identities;
+- the deterministic task response does not echo correlation by default;
+- generic build diagnostics do not emit the correlation ids/key by default.
+
+The correlation is therefore transport evidence only until the Cantiere durable journal explicitly supplies and consumes it.
+
 ## V1 exclusions
 
 This contract does not yet:
 
-- alter `/v1/tasks`;
 - persist remote jobs;
 - schedule retries;
 - choose providers;
+- wire Cantiere's authoritative execution journal into `/v1/tasks`;
 - approve or apply repository changes;
 - define monetary `ResourceBudget` policy.
 
