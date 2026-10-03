@@ -9,6 +9,7 @@ on:
       - "pyproject.toml"
       - "wrangler.toml"
       - ".github/workflows/cloudflare-worker-smoke.yml"
+      - ".github/workflows/cloudflare-private-deploy.yml"
   push:
     branches: [main]
     paths:
@@ -16,6 +17,7 @@ on:
       - "pyproject.toml"
       - "wrangler.toml"
       - ".github/workflows/cloudflare-worker-smoke.yml"
+      - ".github/workflows/cloudflare-private-deploy.yml"
   workflow_dispatch:
 
 permissions:
