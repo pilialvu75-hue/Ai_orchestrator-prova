@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
+from .execution.contracts import ExecutionCorrelation
 from .task_catalog import default_task_kind, validate_task_kind
 
 BuildMode = Literal["plan", "implement", "repair"]
@@ -47,6 +48,7 @@ class BuildRequest:
     inputs: tuple[TaskInput, ...] = ()
     requested_artifacts: tuple[str, ...] = ()
     context: dict[str, Any] = field(default_factory=dict)
+    execution_correlation: ExecutionCorrelation | None = None
 
     def __post_init__(self) -> None:
         task = self.task.strip()
@@ -70,6 +72,17 @@ class BuildRequest:
             dict.fromkeys(a.strip().lower() for a in self.requested_artifacts if a.strip())
         )
         object.__setattr__(self, "requested_artifacts", artifacts)
+
+        correlation = self.execution_correlation
+        if correlation is not None:
+            if correlation.project_id != str(self.project_id).strip():
+                raise ValueError(
+                    "execution_correlation.project_id must match project_id"
+                )
+            if correlation.operation_id != kind:
+                raise ValueError(
+                    "execution_correlation.operation_id must match task_kind"
+                )
 
         if "gcode" in artifacts:
             if family != "manufacturing":
@@ -98,6 +111,14 @@ class BuildRequest:
         ):
             raise ValueError("requested_artifacts must be an array of strings")
 
+        raw_correlation = payload.get("execution_correlation")
+        if raw_correlation is None:
+            execution_correlation = None
+        elif isinstance(raw_correlation, dict):
+            execution_correlation = ExecutionCorrelation.from_json(raw_correlation)
+        else:
+            raise ValueError("execution_correlation must be an object")
+
         return cls(
             task=task,
             project_id=str(payload.get("project_id", "default")),
@@ -108,6 +129,7 @@ class BuildRequest:
             inputs=inputs,
             requested_artifacts=tuple(raw_artifacts),
             context=context,
+            execution_correlation=execution_correlation,
         )
 
 
