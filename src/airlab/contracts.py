@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any, Literal
 
+from .execution import ExecutionCorrelation
 from .task_catalog import default_task_kind, validate_task_kind
 
 BuildMode = Literal["plan", "implement", "repair"]
@@ -47,6 +48,7 @@ class BuildRequest:
     inputs: tuple[TaskInput, ...] = ()
     requested_artifacts: tuple[str, ...] = ()
     context: dict[str, Any] = field(default_factory=dict)
+    execution_correlation: ExecutionCorrelation | None = None
 
     def __post_init__(self) -> None:
         task = self.task.strip()
@@ -70,6 +72,13 @@ class BuildRequest:
             dict.fromkeys(a.strip().lower() for a in self.requested_artifacts if a.strip())
         )
         object.__setattr__(self, "requested_artifacts", artifacts)
+
+        if self.execution_correlation is not None:
+            request_project_id = str(self.project_id).strip()
+            if self.execution_correlation.project_id != request_project_id:
+                raise ValueError(
+                    "execution_correlation.project_id must match project_id"
+                )
 
         if "gcode" in artifacts:
             if family != "manufacturing":
@@ -98,6 +107,13 @@ class BuildRequest:
         ):
             raise ValueError("requested_artifacts must be an array of strings")
 
+        raw_correlation = payload.get("execution_correlation")
+        correlation: ExecutionCorrelation | None = None
+        if raw_correlation is not None:
+            if not isinstance(raw_correlation, dict):
+                raise ValueError("execution_correlation must be an object")
+            correlation = ExecutionCorrelation.from_json(raw_correlation)
+
         return cls(
             task=task,
             project_id=str(payload.get("project_id", "default")),
@@ -108,6 +124,7 @@ class BuildRequest:
             inputs=inputs,
             requested_artifacts=tuple(raw_artifacts),
             context=context,
+            execution_correlation=correlation,
         )
 
 
