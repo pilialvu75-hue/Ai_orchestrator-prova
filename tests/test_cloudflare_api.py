@@ -10,11 +10,15 @@ from airlab.adapters.null_integrations import (
     NullResearcher,
 )
 from airlab.cloudflare_api import dispatch_cloudflare_request
+from airlab.execution import ExecutionCorrelation
 from airlab.service import BuilderService
 
 
 TOKEN = "test-token"
 AUTH = f"Bearer {TOKEN}"
+_REQUEST_FINGERPRINT = (
+    "db5c57fcf1b8861cc7469c311cf073c96d0d377fa2291ac09656f450f2304b2c"
+)
 
 
 def service() -> BuilderService:
@@ -23,6 +27,18 @@ def service() -> BuilderService:
         library=NullModuleLibrary(),
         researcher=NullResearcher(),
         diagnostics=MemoryDiagnostics(),
+    )
+
+
+def correlation() -> ExecutionCorrelation:
+    return ExecutionCorrelation.create(
+        project_id="project-abc",
+        task_id="task-42",
+        execution_id="execution-123",
+        attempt_id="attempt-1",
+        operation_id="software.build",
+        request_fingerprint=_REQUEST_FINGERPRINT,
+        checkpoint_id="checkpoint-1",
     )
 
 
@@ -116,6 +132,57 @@ class CloudflareApiTest(unittest.TestCase):
         self.assertEqual(operation["action"], "create")
         self.assertEqual(operation["path"], ".airlab/mock-result.txt")
         self.assertIn("deterministic staging proof", operation["content"])
+
+    def test_execution_correlation_is_accepted_without_changing_task_result(self) -> None:
+        body = json.dumps(
+            {
+                "task": "Create the correlated staging proof",
+                "project_id": "project-abc",
+                "target": "web",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "execution_correlation": correlation().to_json(),
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+
+        self.assertEqual(result.status, 200)
+        self.assertEqual(result.payload["status"], "ok")
+        self.assertEqual(len(result.payload["operations"]), 1)
+        self.assertNotIn("execution_correlation", result.payload)
+
+    def test_execution_correlation_project_mismatch_fails_closed(self) -> None:
+        body = json.dumps(
+            {
+                "task": "Create the correlated staging proof",
+                "project_id": "project-other",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "execution_correlation": correlation().to_json(),
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+
+        self.assertEqual(result.status, 400)
+        self.assertIn("project_id must match", result.payload["error"])
 
     def test_manufacturing_gcode_still_requires_printer_profile(self) -> None:
         body = json.dumps(
