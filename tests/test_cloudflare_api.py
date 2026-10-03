@@ -10,11 +10,13 @@ from airlab.adapters.null_integrations import (
     NullResearcher,
 )
 from airlab.cloudflare_api import dispatch_cloudflare_request
+from airlab.execution import ExecutionCorrelation
 from airlab.service import BuilderService
 
 
 TOKEN = "test-token"
 AUTH = f"Bearer {TOKEN}"
+FINGERPRINT = "db5c57fcf1b8861cc7469c311cf073c96d0d377fa2291ac09656f450f2304b2c"
 
 
 def service() -> BuilderService:
@@ -24,6 +26,18 @@ def service() -> BuilderService:
         researcher=NullResearcher(),
         diagnostics=MemoryDiagnostics(),
     )
+
+
+def execution_correlation() -> dict[str, object]:
+    return ExecutionCorrelation.create(
+        project_id="cloudflare-smoke",
+        task_id="task-42",
+        execution_id="execution-123",
+        attempt_id="attempt-1",
+        operation_id="software.build",
+        request_fingerprint=FINGERPRINT,
+        checkpoint_id="checkpoint-1",
+    ).to_json()
 
 
 class CloudflareApiTest(unittest.TestCase):
@@ -116,6 +130,132 @@ class CloudflareApiTest(unittest.TestCase):
         self.assertEqual(operation["action"], "create")
         self.assertEqual(operation["path"], ".airlab/mock-result.txt")
         self.assertIn("deterministic staging proof", operation["content"])
+
+    def test_optional_execution_correlation_is_accepted_by_worker_transport(self) -> None:
+        body = json.dumps(
+            {
+                "task": "Create the deterministic staging proof",
+                "project_id": "cloudflare-smoke",
+                "target": "web",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "inputs": [],
+                "requested_artifacts": [],
+                "context": {},
+                "execution_correlation": execution_correlation(),
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+
+        self.assertEqual(result.status, 200)
+        self.assertEqual(result.payload["status"], "ok")
+        self.assertEqual(len(result.payload["operations"]), 1)
+
+    def test_tampered_execution_correlation_is_rejected_by_worker_transport(self) -> None:
+        correlation = execution_correlation()
+        correlation["idempotency_key"] = "airlab:v1:" + ("0" * 64)
+        body = json.dumps(
+            {
+                "task": "Create the deterministic staging proof",
+                "project_id": "cloudflare-smoke",
+                "target": "web",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "inputs": [],
+                "requested_artifacts": [],
+                "context": {},
+                "execution_correlation": correlation,
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+
+        self.assertEqual(result.status, 400)
+        self.assertIn("idempotency_key", result.payload["error"])
+
+    def test_correlation_must_match_project_and_operation(self) -> None:
+        wrong_project = execution_correlation()
+        wrong_project["project_id"] = "different-project"
+        wrong_project["idempotency_key"] = ExecutionCorrelation.create(
+            project_id="different-project",
+            task_id="task-42",
+            execution_id="execution-123",
+            attempt_id="attempt-1",
+            operation_id="software.build",
+            request_fingerprint=FINGERPRINT,
+            checkpoint_id="checkpoint-1",
+        ).idempotency_key
+        body = json.dumps(
+            {
+                "task": "Create the deterministic staging proof",
+                "project_id": "cloudflare-smoke",
+                "target": "web",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "execution_correlation": wrong_project,
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+        self.assertEqual(result.status, 400)
+        self.assertIn("project_id", result.payload["error"])
+
+        wrong_operation = ExecutionCorrelation.create(
+            project_id="cloudflare-smoke",
+            task_id="task-42",
+            execution_id="execution-123",
+            attempt_id="attempt-1",
+            operation_id="software.test",
+            request_fingerprint=FINGERPRINT,
+            checkpoint_id="checkpoint-1",
+        ).to_json()
+        body = json.dumps(
+            {
+                "task": "Create the deterministic staging proof",
+                "project_id": "cloudflare-smoke",
+                "target": "web",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "execution_correlation": wrong_operation,
+            }
+        )
+
+        result = dispatch_cloudflare_request(
+            service(),
+            method="POST",
+            path="/v1/tasks",
+            authorization=AUTH,
+            body=body,
+            auth_token=TOKEN,
+        )
+        self.assertEqual(result.status, 400)
+        self.assertIn("operation_id", result.payload["error"])
 
     def test_manufacturing_gcode_still_requires_printer_profile(self) -> None:
         body = json.dumps(
