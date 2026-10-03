@@ -7,9 +7,15 @@ from urllib.request import Request, urlopen
 
 from airlab.adapters.mock_engine import MockBuilderEngine
 from airlab.adapters.null_integrations import MemoryDiagnostics, NullModuleLibrary, NullResearcher
+from airlab.execution import ExecutionCorrelation
 from airlab.http_api import create_server
 from airlab.intelligence.gateway import create_control_gateway
 from airlab.service import BuilderService
+
+
+_REQUEST_FINGERPRINT = (
+    "db5c57fcf1b8861cc7469c311cf073c96d0d377fa2291ac09656f450f2304b2c"
+)
 
 
 class AirLabHttpRoundTripTests(unittest.TestCase):
@@ -110,6 +116,36 @@ class AirLabHttpRoundTripTests(unittest.TestCase):
 
         serialized_diagnostics = repr(self.diagnostics.events)
         self.assertNotIn(private_task_text, serialized_diagnostics)
+
+    def test_execution_correlation_crosses_real_http_without_generic_leak(self) -> None:
+        correlation = ExecutionCorrelation.create(
+            project_id="project-abc",
+            task_id="task-42",
+            execution_id="execution-123",
+            attempt_id="attempt-1",
+            operation_id="software.build",
+            request_fingerprint=_REQUEST_FINGERPRINT,
+            checkpoint_id="checkpoint-1",
+        )
+
+        result = self._post_json(
+            "/v1/tasks",
+            {
+                "task": "Build the correlated staging proof",
+                "project_id": "project-abc",
+                "mode": "implement",
+                "task_family": "software",
+                "task_kind": "software.build",
+                "execution_correlation": correlation.to_json(),
+            },
+        )
+
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(len(result["operations"]), 1)
+        diagnostics = repr(self.diagnostics.events)
+        self.assertNotIn(correlation.idempotency_key, diagnostics)
+        self.assertNotIn(correlation.execution_id, diagnostics)
+        self.assertNotIn(correlation.attempt_id, diagnostics)
 
     def test_intelligence_gateway_uses_capability_over_real_http(self) -> None:
         capabilities = self._get_json("/v1/intelligence/capabilities")
